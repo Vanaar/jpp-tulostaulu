@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Päivitä ottelun tietoja</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        table {
+            width: 100%;
+            table-layout: fixed;
+        }
+        
+        td {
+            text-align: center;
+            padding: 5px;
+            word-wrap: break-word; /* Allows long words to break and wrap to the next line */
+        }
+        
+        .submit-button {
+            text-align: center;
+        }
+    </style>
+    </head>
+<body>
+    <form method="POST" action="/paivita/{{ottelu.ottelunumero}}">
+        <table>
+            <tr>
+                <td colspan="5" style="text-align: left;">
+                    <input type="text" name="kotijoukkue" value="{{ottelu.kotijoukkue}}">
+                </td>
+            </tr>
+            <tr>
+                <td>{{ottelu.koti_jaksovoitot}}</td>
+                <td>{{ottelu.jakso_0_koti_juoksut}}</td>
+                <td>{{ottelu.jakso_1_koti_juoksut}}</td>
+                <td>{{ottelu.jakso_2_koti_juoksut}}</td>
+                <td>{{ottelu.jakso_3_koti_juoksut}}</td>
+            </tr>
+            <tr>
+                <td>{{ottelu.vieras_jaksovoitot}}</td>
+                <td>{{ottelu.jakso_0_vieras_juoksut}}</td>
+                <td>{{ottelu.jakso_1_vieras_juoksut}}</td>
+                <td>{{ottelu.jakso_2_vieras_juoksut}}</td>
+                <td>{{ottelu.jakso_3_vieras_juoksut}}</td>
+            </tr>
+            <tr>
+                <td colspan="5" style="text-align: left;">
+                    <input type="text" name="vierasjoukke" value="{{ottelu.vierasjoukkue}}">
+                </td>
+            </tr>
+        </table>
+        <div class="submit-button">
+            <button type="submit" style="font-size: 1.5em;">Päivitä</button>
+        </div>
+    </form>
+</body>
+</html>
