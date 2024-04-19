@@ -27,9 +27,20 @@ class Database:
         return ottelu
 
     def update_match(self, ottelunumero, params):
-        ottelu = self.get_match_by_ottelunumero(ottelunumero)
+        ottelu = self.get_match_by_ottelunumero(ottelunumero)        
+
         if ottelu:
-            ottelu.kotijoukkue = params['kotijoukkue']
+            if 'kotijoukkue' in params:
+                ottelu.kotijoukkue = params['kotijoukkue']
+            if 'vierasjoukkue' in params:
+                ottelu.vierasjoukkue = params['vierasjoukkue']
+
+            if 'update_value' in params and 'action' in params:
+                if params['action'] == 'lisaa':
+                    setattr(ottelu, params['update_value'], getattr(ottelu, params['update_value']) + 1)
+                elif params['action'] == 'vahenna':
+                    setattr(ottelu, params['update_value'], getattr(ottelu, params['update_value']) - 1)
+
             try:
                 self.session.commit()
                 return True
