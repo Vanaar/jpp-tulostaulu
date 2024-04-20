@@ -16,6 +16,11 @@ def ottelut():
 @routes_bp.route("/paivita/<int:ottelunumero>/<int:muokattava_osio>", methods=['GET', 'POST'])
 @routes_bp.route("/paivita/<int:ottelunumero>", defaults={'muokattava_osio': 0}, methods=['GET', 'POST'])
 def paivita_ottelu(ottelunumero, muokattava_osio):
+    if muokattava_osio <0 or muokattava_osio is None:
+        muokattava_osio = 0
+    elif muokattava_osio > 4:
+        muokattava_osio = 4
+    
     db = get_db()
     if request.method == 'POST':
         db.update_match(ottelunumero, request.form)

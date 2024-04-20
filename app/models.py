@@ -23,5 +23,7 @@ class Otteludata(Base):
     nykyinen_lyontivuoro = Column(String(10))
     nykyinen_jakso = Column(Integer)
     nykyinen_vuoropari = Column(String(50))
+    vuoropari_nro = Column(Integer)
+    vuoropari_txt = Column(String(5))
     palot = Column(String(10))
     luotu = Column(TIMESTAMP, server_default='CURRENT_TIMESTAMP')
