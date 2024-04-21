@@ -6,6 +6,8 @@ from app.models import Otteludata
 from flask import current_app
 from config import Config
 from app.functions import vuoropari_int_to_str
+from app.functions import jakso_into_to_str
+from sqlalchemy import func
 
 
 def get_db():
@@ -26,6 +28,13 @@ class Database:
     def get_match_by_ottelunumero(self, ottelunumero):
         ottelu = self.session.query(Otteludata).filter_by(ottelunumero=ottelunumero).first()
         return ottelu
+    
+    def uusi_ottelu(self):
+        max_ottelunumero = self.session.query(func.max(Otteludata.ottelunumero)).scalar()
+        ottelu = Otteludata(ottelunumero=max_ottelunumero + 1)
+        self.session.add(ottelu)
+        self.session.commit()
+        return ottelu.ottelunumero
 
     def update_match(self, ottelunumero, params):
         ottelu = self.get_match_by_ottelunumero(ottelunumero)  
@@ -40,7 +49,8 @@ class Database:
                 if params['action'] == 'lisaa':
                     setattr(ottelu, params['update_value'], getattr(ottelu, params['update_value']) + 1)
                 elif params['action'] == 'vahenna':
-                    setattr(ottelu, params['update_value'], getattr(ottelu, params['update_value']) - 1)
+                    if int(getattr(ottelu, params['update_value'])) > 0:
+                        setattr(ottelu, params['update_value'], getattr(ottelu, params['update_value']) - 1)
 
             if 'action' in params:
                 if params['action'] == 'lisaa_palo':
@@ -49,7 +59,21 @@ class Database:
                         
                 if params['action'] == 'poista_palot':
                     ottelu.palot = ''
-                    
+
+                if params['action'] == 'jakso_taakse':
+                    if ottelu.jakso_nro > 1:
+                        ottelu.jakso_nro = ottelu.jakso_nro - 1
+                        ottelu.jakso_txt = jakso_into_to_str(ottelu.jakso_nro)
+                        ottelu.vuoropari_nro = 1
+                        ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
+                        
+                if params['action'] == 'jakso_eteenpain':
+                    if ottelu.jakso_nro < 4:
+                        ottelu.jakso_nro = ottelu.jakso_nro + 1
+                        ottelu.jakso_txt = jakso_into_to_str(ottelu.jakso_nro)
+                        ottelu.vuoropari_nro = 1
+                        ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
+
                 if params['action'] == 'vuoropari_taakse':
                     if ottelu.vuoropari_nro > 1:
                         ottelu.vuoropari_nro = ottelu.vuoropari_nro - 1
@@ -63,11 +87,7 @@ class Database:
                         self.vaihda_lyontivuoro(ottelu)
 
                 if params['action'] == 'vaihda_lyontivuoro':
-                    if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue:
-                        ottelu.nykyinen_lyontivuoro = ottelu.vierasjoukkue
-                    else:
-                        ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue
-                
+                    self.vaihda_lyontivuoro(ottelu)
             try:
                 self.engine.echo = False
                 self.session.commit()

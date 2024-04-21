@@ -14,5 +14,16 @@ def vuoropari_int_to_str(vuoropari_nro):
         12: "K. lopettava",
         13: "K. jatkoparit"
     }
-    return vuoropari_dict.get(vuoropari_nro, "Invalid vuoropari number")
+    return vuoropari_dict.get(vuoropari_nro, "ERROR: Vuoropari")
 
+def jakso_into_to_str(jakso_nro):
+    jakso_dict = {
+        1: "J1",
+        2: "J2",
+        3: "Superv.",
+        4: "Kotiutuskisa"
+    }
+    return jakso_dict.get(jakso_nro, "ERROR: Jakso")
+
+    
+    

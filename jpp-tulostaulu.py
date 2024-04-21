@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 from app.routes import routes_bp
 from app.models import Otteludata
 
@@ -9,4 +9,4 @@ otteludata = Otteludata()
 
 @app.route("/")
 def jpp_tulostaulu():
-    return "<p>JunnutPelaaPesistä-tulostaulu</p>"
+    return render_template('index.html')

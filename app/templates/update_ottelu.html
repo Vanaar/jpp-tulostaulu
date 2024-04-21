@@ -1,31 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Päivitä ottelun tietoja.</title>
+    <title>Päivitä ottelun tietoja</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-        }
-        
-        table {
-            width: 100%;
-            table-layout: fixed;
-        }
-        
-        td {
-            text-align: center;
-            padding: 5px;
-            word-wrap: break-word; /* Allows long words to break and wrap to the next line */
-        }
-        
-        .submit-button {
-            text-align: center;
-        }
-    </style>
+    <link rel="stylesheet" type="text/css" href="/static/css/scoreboard_edit.css">
 </head>
 <body>
     <form method="POST" action="/paivita/{{ottelu.ottelunumero}}/{{muokattava_osio}}">
@@ -34,45 +12,53 @@
                 <td colspan="5"><b>Ottelunumero: {{ottelu.ottelunumero}}</b></td>
             </tr>
             <tr>
-                <td colspan="5" style="text-align: left;">
-                    <input type="text" name="kotijoukkue" value="{{ottelu.kotijoukkue}}">
+                <td>
+                    KOTI: 
+                <td colspan="3">
+                    <input type="text" name="kotijoukkue" value="{{ottelu.kotijoukkue}}"> 
+                </td>
+                <td>
+                    <button type="submit">Päivitä</button>
                 </td>
             </tr>
-            <tr>
-                <td><b>PELI</b></td>
+            <tr class="top">
+                <td><b>TULOS</b></td>
                 <td><b>J1</b></td>
                 <td><b>J2</b></td>
                 <td><b>S</b></td>
                 <td><b>K</b></td>
             </tr>
             <tr>
-                <td>{{ottelu.koti_jaksovoitot}}</td>
-                <td>{{ottelu.jakso_0_koti_juoksut}}</td>
-                <td>{{ottelu.jakso_1_koti_juoksut}}</td>
-                <td>{{ottelu.jakso_2_koti_juoksut}}</td>
-                <td>{{ottelu.jakso_3_koti_juoksut}}</td>
+                <td class="tulos">{{ottelu.koti_jaksovoitot}}</td>
+                <td {% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_1_koti_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_2_koti_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_3_koti_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_4_koti_juoksut}}</td>
             </tr>
             <tr>
-                <td>{{ottelu.vieras_jaksovoitot}}</td>
-                <td>{{ottelu.jakso_0_vieras_juoksut}}</td>
-                <td>{{ottelu.jakso_1_vieras_juoksut}}</td>
-                <td>{{ottelu.jakso_2_vieras_juoksut}}</td>
-                <td>{{ottelu.jakso_3_vieras_juoksut}}</td>
+                <td class="tulos">{{ottelu.vieras_jaksovoitot}}</td>
+                <td {% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_1_vieras_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_2_vieras_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_3_vieras_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_4_vieras_juoksut}}</td>
             </tr>
             <tr>
-                <td colspan="5" style="text-align: left;">
+                <td>
+                    VIERAS: 
+                </td>
+                <td colspan="3">
                     <input type="text" name="vierasjoukkue" value="{{ottelu.vierasjoukkue}}">
+                </td>
+                <td>
+                    <button type="submit">Päivitä</button>
                 </td>
             </tr>
         </table>
-        <div class="submit-button">
-            <button type="submit" style="font-size: 1.5em;">Päivitä</button>
-        </div>
     </form>
     <div style="margin-top: 20px; text-align: center;">
         <table>
             <tr>
-                <td>
+                <td class="no-border">
                     {% if muokattava_osio > 0 %}
                         <input type="button" value="Edellinen jakso" onclick="location.href='/paivita/{{ottelu.ottelunumero}}/{{muokattava_osio-1}}'">
                     {% endif %}
@@ -80,7 +66,7 @@
                 <td>
                     <b>
                     {% if muokattava_osio == 0 %}
-                        PELI
+                        TULOS
                     {% elif muokattava_osio == 1 %}
                         J1
                     {% elif muokattava_osio == 2 %}
@@ -92,7 +78,7 @@
                     {% endif %}
                     </b>
                 </td>
-                <td>
+                <td class="no-border">
                     {% if muokattava_osio < 4 %}
                         <input type="button" value="Seuraava jakso" onclick="location.href='/paivita/{{ottelu.ottelunumero}}/{{muokattava_osio+1}}'">
                     {% endif %}
@@ -103,7 +89,7 @@
                 <td>
                     <table>
                         <tr>
-                            <td>
+                            <td class="no-border">
                                 <form method="POST" action="/paivita/{{ottelu.ottelunumero}}/{{muokattava_osio}}">
                                     <button type="submit" name="action" value="lisaa">+</button>
                                     <br/><br/>
@@ -111,23 +97,23 @@
                                         {{ottelu.koti_jaksovoitot}}
                                         <input type="hidden" name="update_value" value="koti_jaksovoitot"/>
                                     {% elif muokattava_osio == 1 %}
-                                        {{ottelu.jakso_0_koti_juoksut}}
-                                        <input type="hidden" name="update_value" value="jakso_0_koti_juoksut"/>
-                                    {% elif muokattava_osio == 2 %}
                                         {{ottelu.jakso_1_koti_juoksut}}
                                         <input type="hidden" name="update_value" value="jakso_1_koti_juoksut"/>
-                                    {% elif muokattava_osio == 3 %}
+                                    {% elif muokattava_osio == 2 %}
                                         {{ottelu.jakso_2_koti_juoksut}}
                                         <input type="hidden" name="update_value" value="jakso_2_koti_juoksut"/>
-                                    {% elif muokattava_osio == 4 %}
+                                    {% elif muokattava_osio == 3 %}
                                         {{ottelu.jakso_3_koti_juoksut}}
                                         <input type="hidden" name="update_value" value="jakso_3_koti_juoksut"/>
+                                    {% elif muokattava_osio == 4 %}
+                                        {{ottelu.jakso_4_koti_juoksut}}
+                                        <input type="hidden" name="update_value" value="jakso_4_koti_juoksut"/>
                                     {% endif %}
                                     <br/><br/>
                                     <button type="submit" name="action" value="vahenna">-</button>
                                 </form>
                             </td>
-                            <td>
+                            <td class="no-border">
                                 <form method="POST" action="/paivita/{{ottelu.ottelunumero}}/{{muokattava_osio}}">
                                     <button type="submit" name="action" value="lisaa">+</button>
                                     <br/><br/>
@@ -135,17 +121,17 @@
                                         {{ottelu.vieras_jaksovoitot}}
                                         <input type="hidden" name="update_value" value="vieras_jaksovoitot"/>
                                     {% elif muokattava_osio == 1 %}
-                                        {{ottelu.jakso_0_vieras_juoksut}}
-                                        <input type="hidden" name="update_value" value="jakso_0_vieras_juoksut"/>
-                                    {% elif muokattava_osio == 2 %}
                                         {{ottelu.jakso_1_vieras_juoksut}}
                                         <input type="hidden" name="update_value" value="jakso_1_vieras_juoksut"/>
-                                    {% elif muokattava_osio == 3 %}
+                                    {% elif muokattava_osio == 2 %}
                                         {{ottelu.jakso_2_vieras_juoksut}}
                                         <input type="hidden" name="update_value" value="jakso_2_vieras_juoksut"/>
-                                    {% elif muokattava_osio == 4 %}
+                                    {% elif muokattava_osio == 3 %}
                                         {{ottelu.jakso_3_vieras_juoksut}}
                                         <input type="hidden" name="update_value" value="jakso_3_vieras_juoksut"/>
+                                    {% elif muokattava_osio == 4 %}
+                                        {{ottelu.jakso_4_vieras_juoksut}}
+                                        <input type="hidden" name="update_value" value="jakso_4_vieras_juoksut"/>
                                     {% endif %}
                                     <br/><br/>
                                     <button type="submit" name="action" value="vahenna">-</button>
@@ -164,7 +150,9 @@
                 </td>
                 <td>
                     <b>PALOT:<b/><br/>
-                    {{ottelu.palot}}
+                        <span class="palot">
+                            {{ottelu.palot}}
+                        </span>
                 </td>
                 <td>
                     <form method="POST" action="/paivita/{{ottelu.ottelunumero}}/{{muokattava_osio}}">
@@ -181,7 +169,7 @@
                 <td>
                     <b>JAKSO</b>
                     <br/>
-                    {{ottelu.nykyinen_jakso}}
+                    {{ottelu.jakso_txt}}
                 </td>
                 <td>
                     <form method="POST" action="/paivita/{{ottelu.ottelunumero}}/{{muokattava_osio}}">

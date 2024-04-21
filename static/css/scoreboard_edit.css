@@ -1,0 +1,83 @@
+/* Reset */
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Table styles */
+table {
+  width: 100%;
+  table-layout: fixed;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  border-collapse: collapse;
+}
+
+/* Cell styles */
+td {
+  text-align: center;
+  padding: 5px;
+  word-wrap: break-word; /* Allows long words to break and wrap to the next line */
+  border: 1px solid black;
+  background-color: white;
+}
+
+/* Header row */
+thead tr {
+  background-color: #444;
+  color: #fff;
+}
+
+/* Top row */
+tr.top td {
+  background-color: navy;
+  color: white;
+}
+
+/* Selected cells */
+td.tulos {
+  background-color: cyan;
+}
+
+/* Sisävuoro */
+td.sisavuoro {
+  background-color: gold;
+}
+
+/* Current period */
+td.current_period {
+  background-color: navy;
+  color: white;
+}
+
+/* Invisible cells */
+td.invisible {
+  visibility: hidden;
+  border: none;
+}
+
+/* Palot */
+.palot {
+  color: red;
+  border: none;
+}
+
+/* No border */
+td.no-border {
+  border: none;
+}
+
+/* Button */
+button {
+  background-color: navy;
+  color: white;
+  border: none;
+  padding: 3px 3px;
+  border: 2px solid grey;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+}

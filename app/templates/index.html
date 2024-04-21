@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Päivitä ottelun tietoja</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <h1>Junnut Pelaa Pesistä -tulostaulu</h1>
+
+    <a href="/uusi">Aloita uusi ottelu</a>
+
+    <form id="updateForm" action="/paivita/" method="GET">
+        <label for="ottelunumero">Syötä ottelunumero:</label>
+        <input type="text" id="ottelunumero" name="ottelunumero">
+        <button type="submit">Päivitä</button>
+    </form>
+
+    <script>
+        // JavaScript to add functionality to the form
+        document.getElementById('updateForm').addEventListener('submit', function(event) {
+            // Prevent the default form submission behavior
+            event.preventDefault();
+
+            // Get the value entered in the text input field
+            var matchNumber = document.getElementById('ottelunumero').value;
+
+            // Construct the URL with the match number
+            var url = "/paivita/" + matchNumber;
+
+            // Redirect the user to the constructed URL
+            window.location.href = url;
+        });
+    </script>
+</body>
+</html>
