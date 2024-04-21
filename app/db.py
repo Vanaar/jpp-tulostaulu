@@ -1,5 +1,5 @@
 # database.py
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
 from app.models import Otteludata
@@ -7,7 +7,6 @@ from flask import current_app
 from config import Config
 from app.functions import vuoropari_int_to_str
 from app.functions import jakso_into_to_str
-from sqlalchemy import func
 
 
 def get_db():
@@ -28,7 +27,7 @@ class Database:
     def get_match_by_ottelunumero(self, ottelunumero):
         ottelu = self.session.query(Otteludata).filter_by(ottelunumero=ottelunumero).first()
         return ottelu
-    
+
     def uusi_ottelu(self):
         max_ottelunumero = self.session.query(func.max(Otteludata.ottelunumero)).scalar()
         ottelu = Otteludata(ottelunumero=max_ottelunumero + 1)
@@ -74,6 +73,7 @@ class Database:
                         ottelu.vuoropari_nro = 1
                         ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
 
+
                 if params['action'] == 'vuoropari_taakse':
                     if ottelu.vuoropari_nro > 1:
                         ottelu.vuoropari_nro = ottelu.vuoropari_nro - 1
@@ -91,9 +91,13 @@ class Database:
             try:
                 self.engine.echo = False
                 self.session.commit()
+                self.session.close()
+                self.engine.dispose()
                 return True
             except IntegrityError:
                 self.session.rollback()
+                self.session.close()
+                self.engine.dispose()
                 return False
         return False
 
@@ -102,4 +106,6 @@ class Database:
             if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue:
                 ottelu.nykyinen_lyontivuoro = ottelu.vierasjoukkue
             else:
-                ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue
+                ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue                
+
+                
