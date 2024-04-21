@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv='refresh' content='10'>
+    <title>Junnut Pelaa Pesistä -tulostaulu</title>
+    <link rel='stylesheet' href='/static/css/scoreboard_default.css'>
+</head>
+<body>	
+    <table class='scoreboard' border='1' cellspacing='0' cellpadding='5' style='border-collapse: collapse; font-family: Arial, sans-serif;'>
+        <tbody>
+            <tr class='top'>
+                <td colspan='2' class='invisible'></td>
+                <td>1</td>
+                <td>2</td>
+                <td>S</td>
+                <td>K</td>
+            </tr>
+            <tr>
+                <td class='team_names'>{{ottelu.kotijoukkue}}</td>
+                <td class='total-points'>{{ottelu.koti_jaksovoitot}}</td>
+                <td {% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_1_koti_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_2_koti_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_3_koti_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_4_koti_juoksut}}</td>
+                {% if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}
+                <td class='palot'>{{ottelu.palot}}</td>
+                {% endif %}
+            </tr>
+            <tr>
+                <td class='team_names'>{{ottelu.vierasjoukkue}}</td>
+                <td class='total-points'>{{ottelu.vieras_jaksovoitot}}</td>
+                <td {% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_1_vieras_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_2_vieras_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_3_vieras_juoksut}}</td>
+                <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_4_vieras_juoksut}}</td>
+                {% if ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}
+                <td class='palot'>{{ottelu.palot}}</td>
+                {% endif %}
+            </tr>
+            <tr>
+                <td class='current_period' colspan="4">{{ottelu.jakso_txt}} / {{ottelu.vuoropari_txt}}</td>
+                <td class='current_period' colspan="2"></td>
+            </tr>
+            <tr>
+                <td class="promo" colspan="6">
+                    Tulostaulun tarjoaa: <b>Junnut Pelaa Pesistä</b>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

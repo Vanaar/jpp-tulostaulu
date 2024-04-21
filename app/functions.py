@@ -18,9 +18,9 @@ def vuoropari_int_to_str(vuoropari_nro):
 
 def jakso_into_to_str(jakso_nro):
     jakso_dict = {
-        1: "J1",
-        2: "J2",
-        3: "Superv.",
+        1: "1. jakso",
+        2: "2. jakso",
+        3: "Supervuoro",
         4: "Kotiutuskisa"
     }
     return jakso_dict.get(jakso_nro, "ERROR: Jakso")

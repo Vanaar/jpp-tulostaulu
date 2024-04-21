@@ -26,7 +26,10 @@ class Database:
     
     def get_match_by_ottelunumero(self, ottelunumero):
         ottelu = self.session.query(Otteludata).filter_by(ottelunumero=ottelunumero).first()
-        return ottelu
+        if ottelu:
+            return ottelu
+        else:
+            return False
 
     def uusi_ottelu(self):
         max_ottelunumero = self.session.query(func.max(Otteludata.ottelunumero)).scalar()
