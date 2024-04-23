@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv='refresh' content='10'>
+    <title>Junnut Pelaa Pesistä -tulostaulu</title>
+    <link rel='stylesheet' href='/static/css/scoreboard_default.css'>
+</head>
+<body>    
+<div id="sisalto"></div>
+    
+<script>
+    function fetchSisalto() {
+        fetch('/{{ottelu.ottelunumero}}/tulostaulu')
+            .then(response => response.text()) // Convert the response to text
+            .then(data => {
+                document.getElementById('sisalto').innerHTML = data; // Set the data as inner HTML
+            })
+            .catch(error => console.error('Error fetching sisalto:', error));
+    }
+
+    // Fetch sisalto from server every 5 seconds
+    setInterval(fetchSisalto, 5000);
+
+    // Fetch sisalto immediately when the page loads
+    fetchSisalto();
+</script>
+</body>
+</html>

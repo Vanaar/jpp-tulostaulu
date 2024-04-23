@@ -43,8 +43,12 @@ class Database:
 
         if ottelu:
             if 'kotijoukkue' in params:
+                if ottelu.kotijoukkue == ottelu.nykyinen_lyontivuoro:
+                    ottelu.nykyinen_lyontivuoro = params['kotijoukkue']
                 ottelu.kotijoukkue = params['kotijoukkue']
             if 'vierasjoukkue' in params:
+                if ottelu.vierasjoukkue == ottelu.nykyinen_lyontivuoro:
+                    ottelu.nykyinen_lyontivuoro = params['vierasjoukkue']
                 ottelu.vierasjoukkue = params['vierasjoukkue']
 
             if 'update_value' in params and 'action' in params:
@@ -84,7 +88,7 @@ class Database:
                         self.vaihda_lyontivuoro(ottelu)
             
                 if params['action'] == 'vuoropari_eteenpain':
-                    if ottelu.vuoropari_nro < 13:
+                    if ottelu.vuoropari_nro < 14:
                         ottelu.vuoropari_nro = ottelu.vuoropari_nro + 1
                         ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
                         self.vaihda_lyontivuoro(ottelu)
@@ -92,16 +96,17 @@ class Database:
                 if params['action'] == 'vaihda_lyontivuoro':
                     self.vaihda_lyontivuoro(ottelu)
             try:
-                self.engine.echo = False
+                self.engine.echo = True
                 self.session.commit()
-                self.session.close()
-                self.engine.dispose()
                 return True
             except IntegrityError:
                 self.session.rollback()
-                self.session.close()
-                self.engine.dispose()
                 return False
+            
+            finally:
+                pass
+                #self.session.close()
+                #self.engine.dispose()
         return False
 
     def vaihda_lyontivuoro(self, ottelu):
@@ -111,4 +116,3 @@ class Database:
             else:
                 ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue                
 
-                

@@ -10,3 +10,6 @@ otteludata = Otteludata()
 @app.route("/")
 def jpp_tulostaulu():
     return render_template('index.html')
+
+if __name__ == "__main__":
+    app.run(debug=True)

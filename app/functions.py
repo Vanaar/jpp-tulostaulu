@@ -12,7 +12,8 @@ def vuoropari_int_to_str(vuoropari_nro):
         10: "S. lopettava",
         11: "K. aloittava",
         12: "K. lopettava",
-        13: "K. jatkoparit"
+        13: "K. jatkoparit",
+        14: "Ottelu päättynyt"
     }
     return vuoropari_dict.get(vuoropari_nro, "ERROR: Vuoropari")
 
