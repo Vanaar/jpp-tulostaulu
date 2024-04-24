@@ -8,6 +8,7 @@ class Otteludata(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ottelunumero = Column(Integer)
+    pesistulokset = Column(Integer, default=0)
     kotijoukkue = Column(String(255), default ="Koti")
     vierasjoukkue = Column(String(255), default="Vieras")
     koti_jaksovoitot = Column(Integer, default=0)

@@ -1,3 +1,14 @@
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from config import Config
+import datetime
+
+
+def debug_message(message, level=1):
+    if Config.DEBUG and level >= Config.DEBUG_LEVEL:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] {message}")
+
 def vuoropari_int_to_str(vuoropari_nro):
     vuoropari_dict = {
         1: "1. aloittava",
@@ -25,6 +36,8 @@ def jakso_into_to_str(jakso_nro):
         4: "Kotiutuskisa"
     }
     return jakso_dict.get(jakso_nro, "ERROR: Jakso")
+
+
 
     
     

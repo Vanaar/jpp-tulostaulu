@@ -10,3 +10,4 @@ class Config:
 
     # Other configuration variables
     DEBUG = True
+    DEBUG_LEVEL = 1

@@ -1,9 +1,13 @@
 from flask import request, redirect, render_template, Blueprint
 from app.db import Database, get_db
+from config import Config
+from app.functions import debug_message
 from bs4 import BeautifulSoup
+from selenium import webdriver
+
 import requests
 import time
-from selenium import webdriver
+
 
 routes_bp = Blueprint('routes', __name__)
 
@@ -42,11 +46,31 @@ def ottelu_tulostaulu(ottelunumero):
     # Yritetään ensin löytää ottelu tietokannasta
     ottelu = db.get_match_by_ottelunumero(ottelunumero)
     
+    otteluKannassa = False
+    
     if ottelu:
-        return render_template('ottelu.html', ottelu=ottelu)   
+        otteluKannassa = True
+        if (ottelu.pesistulokset == 1): #Otteludataa päivitetään pesistulokset.fi:stä
+            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=True)
+        return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False)   
     else:
-     #kirjoitetaan tähän myöhemmin käsittely sille, että haetaan ottelu pesistulokset.fi:stä
-     pass
+        #Tarkistaan löytyykö ottelua pesistulokset.fi:stä
+        def is_valid_webpage(url):
+            response = requests.get(url)
+            if response.status_code == 200:
+                return True
+            else:
+                return False
+
+        if is_valid_webpage(f"https://www.pesistulokset.fi/ottelut/{ottelunumero}"):
+            #Lisätään ottelu kantaan
+            print(f"Lisätään ottelu kantaan pesistuloksista: {ottelunumero}")
+            db.uusi_ottelu(pesistulokset=1, ottelunumero=ottelunumero)
+            print(f"Ladataan otteludata pesistuloksista: {ottelunumero}")
+            uusi_ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
+            return render_template('ottelu.html', ottelu=uusi_ottelu, pesistulokset=True)           
+        else:
+            return "Ottelua ei ole PT:ssä eikä tietokannassa"
 
 @routes_bp.route("/<int:ottelunumero>/tulostaulu", methods=['GET'])
 def nayta_tulostaulu(ottelunumero):  
@@ -55,23 +79,12 @@ def nayta_tulostaulu(ottelunumero):
     return render_template('tulostaulu.html', ottelu=ottelu)
 
 @routes_bp.route("/pt/<int:ottelunumero>", methods=['GET'])
-def tulosta_pt_ottelu(ottelunumero):
-    url = f"https://www.pesistulokset.fi/ottelut/{ottelunumero}#live"
-
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")
-    driver = webdriver.Chrome(options=options)
-    driver.get(url)
-    time.sleep(1)
-    page_content = driver.page_source
-    driver.quit()
+def lataa_otteludata_pesistuloksista(ottelunumero):
+    db = get_db()
+    print(f"Route PT: Ladataan otteludata pesistuloksista: {ottelunumero}")
+    try:
+        ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
+        return f"Otteludatan lataus ajettu: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+    except Exception as e:
+        return f"Virhe: {e}"
     
-    soup = BeautifulSoup(page_content, "html.parser")
-    element = soup.find('div', {'class': 'innings home d-flex'})
-    a_elements = element.find_all('a')
-    tulos1 = a_elements[0]
-    tulos2 = a_elements[1]
-    tulos3 = a_elements[2]
-    tulos4 = a_elements[3]
-    
-    return tulos1.text + " - " + tulos2.text + " - " + tulos3.text + " - " + tulos4.text

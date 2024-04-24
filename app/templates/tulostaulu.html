@@ -14,9 +14,7 @@
                 <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_2_koti_juoksut}}</td>
                 <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_3_koti_juoksut}}</td>
                 <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_4_koti_juoksut}}</td>
-                {% if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}
-                <td class='palot'>{{ottelu.palot}}</td>
-                {% endif %}
+                <td class='palot' rowspan="2">{{ottelu.palot}}</td>
             </tr>
             <tr>
                 <td class='team_names'>{{ottelu.vierasjoukkue}}</td>
@@ -25,9 +23,6 @@
                 <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_2_vieras_juoksut}}</td>
                 <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_3_vieras_juoksut}}</td>
                 <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ottelu.jakso_4_vieras_juoksut}}</td>
-                {% if ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}
-                <td class='palot'>{{ottelu.palot}}</td>
-                {% endif %}
             </tr>
             <tr>
                 <td class='current_period' colspan="4">{{ottelu.jakso_txt}} / {{ottelu.vuoropari_txt}}</td>
@@ -38,5 +33,12 @@
                     Tulostaulun tarjoaa: <b>Junnut Pelaa Pesistä</b>
                 </td>
             </tr>
+            <tr class="debug">
+                <td colspan="6">
+                    {{ottelu.pesistulokset}}
+                </td>
+            </tr>
+
+            
         </tbody>
     </table>

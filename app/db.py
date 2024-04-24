@@ -1,39 +1,82 @@
 # database.py
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ResourceClosedError
+from sqlalchemy.pool import QueuePool
+from sqlalchemy.orm import Session
+from app.functions import debug_message
 from app.models import Otteludata
-from flask import current_app
+from flask import g, current_app
 from config import Config
 from app.functions import vuoropari_int_to_str
 from app.functions import jakso_into_to_str
+from bs4 import BeautifulSoup
+from selenium import webdriver
+
+import inspect
+import time
 
 
+
+#
+#def get_db():
+#    if 'db' not in current_app.config:
+#        current_app.config['db'] = Database(Config.SQLALCHEMY_DATABASE_URI)
+#    return current_app.config['db']
+
+#
 def get_db():
-    if 'db' not in current_app.config:
-        current_app.config['db'] = Database(Config.SQLALCHEMY_DATABASE_URI)
-    return current_app.config['db']
+    if 'db' not in g:
+        g.db = Database(Config.SQLALCHEMY_DATABASE_URI)
+    return g.db
 
 class Database:
     def __init__(self, database_uri):
-        self.engine = create_engine(database_uri, echo=True)
+        debug_message(f"Connecting to database: {database_uri}")
+        self.engine = create_engine(database_uri, poolclass=QueuePool, echo=False)
+        Session = sessionmaker(bind=self.engine)
+        self.session = Session()
+        debug_message("Connected to database")
+
+    def close_connection(self):
+        debug_message("Closing database connection")
+        if self.session:
+            debug_message("Closing session")
+            self.session.close()
+        debug_message("Disposing engine")
+        self.engine.dispose()
+
+    def get_match_by_ottelunumero(self, ottelunumero):
+        # Close the existing session if it's active
+        if self.session:
+            self.session.close()
+
+        # Create a new session
         Session = sessionmaker(bind=self.engine)
         self.session = Session()
 
-    def list_matches(self):
-        matches = self.session.query(Otteludata).all()
-        return matches
-    
-    def get_match_by_ottelunumero(self, ottelunumero):
-        ottelu = self.session.query(Otteludata).filter_by(ottelunumero=ottelunumero).first()
-        if ottelu:
-            return ottelu
-        else:
+        try:
+            debug_message(f"get_match_by_ottelunumero({ottelunumero}) called by: {inspect.stack()[1].function}")
+            ottelu = self.session.query(Otteludata).filter_by(ottelunumero=ottelunumero).first()
+            if ottelu:
+                return ottelu
+            else:
+                debug_message(f"Ottelua {ottelunumero} ei löytynyt kannasta")
+                return False
+        except ResourceClosedError as e:
+            debug_message(f"ResourceClosedError: {e}", Config.DEBUG_MESSAGE_LEVEL_ERROR)
             return False
-
-    def uusi_ottelu(self):
-        max_ottelunumero = self.session.query(func.max(Otteludata.ottelunumero)).scalar()
-        ottelu = Otteludata(ottelunumero=max_ottelunumero + 1)
+        except Exception as e:
+            debug_message(f"Error: {e}", Config.DEBUG_MESSAGE_LEVEL_ERROR)
+            return False
+        
+    def uusi_ottelu(self, pesistulokset=0, ottelunumero=0):
+        if pesistulokset == 1 and ottelunumero > 0:
+            ottelu = Otteludata(ottelunumero=ottelunumero, pesistulokset=pesistulokset)
+        else:
+            max_ottelunumero = self.session.query(func.max(Otteludata.ottelunumero)).scalar()
+            ottelu = Otteludata(ottelunumero=max_ottelunumero + 1, pesistulokset=pesistulokset)
+            
         self.session.add(ottelu)
         self.session.commit()
         return ottelu.ottelunumero
@@ -96,17 +139,18 @@ class Database:
                 if params['action'] == 'vaihda_lyontivuoro':
                     self.vaihda_lyontivuoro(ottelu)
             try:
-                self.engine.echo = True
+                self.engine.echo = False
                 self.session.commit()
                 return True
-            except IntegrityError:
+            except IntegrityError as e:
                 self.session.rollback()
+                print(e)
                 return False
+            except Exception as e:
+                print(e)
             
             finally:
-                pass
-                #self.session.close()
-                #self.engine.dispose()
+                self.close_connection()
         return False
 
     def vaihda_lyontivuoro(self, ottelu):
@@ -116,3 +160,104 @@ class Database:
             else:
                 ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue                
 
+    def lataaOtteludataPesistuloksista(self, ottelunumero, ottelu=None):
+        debug_message(f"lataaOtteludataPesistuloksista({ottelunumero}) called by: {inspect.stack()[1].function}", Config.DEBUG_MESSAGE_LEVEL_INFO)
+        url = f"https://www.pesistulokset.fi/ottelut/{ottelunumero}#live"
+        
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless=new")
+        driver = webdriver.Chrome(options=options)
+        
+
+        driver.get(url)
+        time.sleep(1)
+        page_content = driver.page_source
+        driver.quit()
+
+        soup = BeautifulSoup(page_content, "html.parser")
+        kotijoukkue = soup.find_all('div', {'class': 'match-detail-team'})[0].find_all('a')[1].text.strip()
+        vierasjoukkue = soup.find_all('div', {'class': 'match-detail-team'})[1].find('a').text.strip()
+
+        tulostaulu = soup.find('div', {'class': 'live-result-board'})
+        j1_koti = tulostaulu.find_next('div', {'class': 'innings home d-flex'})
+        j1_koti_pisteet = j1_koti.find_all('a', {'class': 'inning'})
+        j1_koti_yht = j1_koti.find('div', {'class': 'inning'}).text.strip()
+
+        j1_vieras = tulostaulu.find_next('div', {'class': 'innings away d-flex'})
+        j1_vieras_pisteet = j1_vieras.find_all('a', {'class': 'inning'})
+        j1_vieras_yht = j1_vieras.find('div', {'class': 'inning'}).text.strip()
+
+        j2_koti = j1_koti.find_next('div', {'class': 'innings home d-flex'})
+        j2_koti_pisteet = j2_koti.find_all('a', {'class': 'inning'})
+        j2_koti_yht = j2_koti.find('div', {'class': 'inning'}).text.strip()
+        
+        j2_vieras = j1_vieras.find_next('div', {'class': 'innings away d-flex'})
+        j2_vieras_pisteet = j2_vieras.find_all('a', {'class': 'inning'})
+        j2_vieras_yht = j2_vieras.find('div', {'class': 'inning'}).text.strip()
+        
+        j3_koti = j2_koti.find_next('div', {'class': 'innings home d-flex'})
+        j3_koti_yht = j3_koti.find('a', {'class': 'inning'}).text.strip()
+
+        j3_vieras = j2_vieras.find_next('div', {'class': 'innings away d-flex'})
+        j3_vieras_yht = j3_vieras.find('a', {'class': 'inning'}).text.strip()
+
+        j4_koti = j3_koti.find_next('div', {'class': 'innings home d-flex'})
+        j4_koti_yht = j4_koti.find('a', {'class': 'inning'}).text.strip()
+
+        j4_vieras = j3_vieras.find_next('div', {'class': 'innings away d-flex'})
+        j4_vieras_yht = j4_vieras.find('a', {'class': 'inning'}).text.strip()
+
+        jaksovoitot = tulostaulu.find('div', {'class': 'period-total'}).find_all('div', {'class': 'inning'})
+        koti_jaksovoitot = jaksovoitot[0].text.strip()
+        vieras_jaksovoitot = jaksovoitot[1].text.strip()
+        
+        if ottelu is None:
+            ottelu = self.get_match_by_ottelunumero(ottelunumero)
+            
+        ottelu.kotijoukkue = kotijoukkue
+        ottelu.vierasjoukkue = vierasjoukkue
+        ottelu.jakso_1_koti_juoksut = j1_koti_yht
+        ottelu.jakso_1_vieras_juoksut = j1_vieras_yht
+        ottelu.jakso_2_koti_juoksut = j2_koti_yht
+        ottelu.jakso_2_vieras_juoksut = j2_vieras_yht
+        ottelu.jakso_3_koti_juoksut = j3_koti_yht
+        ottelu.jakso_3_vieras_juoksut = j3_vieras_yht
+        ottelu.jakso_4_koti_juoksut = j4_koti_yht
+        ottelu.jakso_4_vieras_juoksut = j4_vieras_yht
+        ottelu.koti_jaksovoitot = koti_jaksovoitot
+        ottelu.vieras_jaksovoitot = vieras_jaksovoitot
+        
+        #nykyinen vuoropari
+        vuoropari_txt = soup.find('div', {'class': 'text-muted font-weight-bold text-center'}).text.strip()
+        ottelu.vuoropari_txt = vuoropari_txt
+        
+        #lyöntivuoro
+        jakso = 0
+        for i, (j_koti, j_vieras) in enumerate(zip([j1_koti, j2_koti, j3_koti, j4_koti], [j1_vieras, j2_vieras, j3_vieras, j4_vieras]), start=1):
+            if j_koti.find('a', {'class': 'bg-orange'}):
+                ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue
+                jakso = i
+                break
+            elif j_vieras.find('a', {'class': 'bg-orange'}):
+                ottelu.nykyinen_lyontivuoro = ottelu.vierasjoukkue
+                jakso = i
+                break
+            
+        ottelu.jakso_nro = jakso
+        ottelu.jakso_txt = jakso_into_to_str(jakso)
+        
+        #outs_div = soup.select_one(".out.text-danger")
+        #print 
+
+        
+        try:
+            self.engine.echo = False
+            self.session.commit()
+            return ottelu
+        except IntegrityError as e:
+            self.session.rollback()
+            print(e)
+            return False
+        except Exception as e:
+            print(e)
+            return False

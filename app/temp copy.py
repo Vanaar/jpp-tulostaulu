@@ -38,7 +38,7 @@ def extract_period_data(soup, period_arrays):
     return period_arrays
 
 def get_current_inning(soup):
-    current_inning_div = soup.select_one(".text-muted.font-weight-bold.text-center")
+    current_inning_div = soup.select_one(".text-muted font-weight-bold text-center")
     return current_inning_div.get_text(strip=True) if current_inning_div else None
 
 def get_current_batting_team(soup):

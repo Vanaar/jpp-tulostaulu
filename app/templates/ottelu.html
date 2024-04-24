@@ -7,23 +7,40 @@
     <link rel='stylesheet' href='/static/css/scoreboard_default.css'>
 </head>
 <body>    
-<div id="sisalto"></div>
+<div id="tulostaulu"></div>
+<div id="pt_loader"></div>
     
 <script>
-    function fetchSisalto() {
+    function fetchTulostaulu() {
         fetch('/{{ottelu.ottelunumero}}/tulostaulu')
             .then(response => response.text()) // Convert the response to text
             .then(data => {
-                document.getElementById('sisalto').innerHTML = data; // Set the data as inner HTML
+                document.getElementById('tulostaulu').innerHTML = data; // Set the data as inner HTML
             })
             .catch(error => console.error('Error fetching sisalto:', error));
     }
 
+    function lataaData() {
+        fetch('/pt/{{ottelu.ottelunumero}}')
+            .then(response => response.text()) // Convert the response to text
+            .then(data => {
+                document.getElementById('pt_loader').innerHTML = data; // Set the data as inner HTML
+            })
+            .catch(error => console.error('Virhe otteludatan noudossa:', error));
+    }
+
     // Fetch sisalto from server every 5 seconds
-    setInterval(fetchSisalto, 5000);
+    
+    setInterval(fetchTulostaulu, 5000);
+    fetchTulostaulu();
+
+    {% if ottelu.pesistulokset == 1 %} 
+        setInterval(lataaData, 10000);
+    {% endif %}
 
     // Fetch sisalto immediately when the page loads
-    fetchSisalto();
+    
+    
 </script>
 </body>
 </html>
