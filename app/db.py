@@ -308,9 +308,12 @@ class Database:
         ottelu.jakso_nro = jakso
         ottelu.jakso_txt = jakso_into_to_str(jakso)
         
-        #outs_div = soup.select_one(".out.text-danger")
-        #print 
-
+        #palot
+        try:
+            palot = soup.find('div', {'class': ['out', 'text-danger']}).text.strip()
+            ottelu.palot = palot.upper()
+        except AttributeError:
+            ottelu.palot = ""
         
         return self.commit(ottelu)
         
