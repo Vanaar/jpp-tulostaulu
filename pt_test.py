@@ -1,6 +1,7 @@
 import time
 from bs4 import BeautifulSoup, SoupStrainer
 from selenium import webdriver
+from app.functions import parsi_x_palot
 
 url = f"https://www.pesistulokset.fi/ottelut/76285#live"
 
@@ -71,7 +72,7 @@ for i, (j_koti, j_vieras) in enumerate(zip([j1_koti, j2_koti, j3_koti, j4_koti],
 
 
     
-    palot = soup.find('div', {'class': ['out', 'text-danger']}).text.strip().upper()
+    palot = soup.find('div', {'class': ['out', 'text-danger']}).text.strip()
 
 print(j1_koti_yht)
 print(j1_vieras_yht)
@@ -82,5 +83,33 @@ print(j4_vieras_yht)
 print(koti_jaksovoitot.text.strip())
 print(vieras_jaksovoitot.text.strip())
 print(vuoropari_txt)
-print(f"Palot: {palot}")
+print("Tutkitaan palot...")
+if palot.islower():
+    print("Palot ({palot}) is fully lowercase")
+    palot = palot.upper()
+    if palot.upper():
+        print(f"Palot ({palot}) is now uppercase")
+    else:
+        print(f"Palot ({palot}) is still not uppercase")
+    print(f"Palot: {palot}")
+else:
+    print("Palot is not fully lowercase")
+    if palot.isupper():
+        print("Palot is fully uppercase")
+        palot = palot.lower()
+        if palot.lower():
+            print(f"Palot ({palot}) is now lowercase")
+        else:
+            print(f"Palot ({palot}) is still not lowercase")
+    else:
+        print("Palot is not fully uppercase")
+        palot = palot.lower()
+        if palot.lower():
+            print(f"Palot ({palot}) is now lowercase")
+        else:
+            print(f"Palot ({palot}) is still not lowercase")
+            
+print("Palo length:")
+print(len(palot))
+print(parsi_x_palot(len(palot)))
 

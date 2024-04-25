@@ -40,6 +40,12 @@ def jakso_into_to_str(jakso_nro):
     }
     return jakso_dict.get(jakso_nro, "ERROR: Jakso")
 
+def parsi_x_palot(palot: int):
+    palot_txt = ""
+    for i in range(0, palot):
+        palot_txt += "X"
+    return palot_txt
+
 def lataa_www_sivu(url):
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")

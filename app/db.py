@@ -11,6 +11,7 @@ from flask import g, current_app
 from config import Config
 from app.functions import vuoropari_int_to_str
 from app.functions import jakso_into_to_str
+from app.functions import parsi_x_palot
 from bs4 import BeautifulSoup
 from selenium import webdriver
 
@@ -311,7 +312,7 @@ class Database:
         #palot
         try:
             palot = soup.find('div', {'class': ['out', 'text-danger']}).text.strip()
-            ottelu.palot = palot.upper()
+            ottelu.palot = parsi_x_palot(len(palot))
         except AttributeError:
             ottelu.palot = ""
         
