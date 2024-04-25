@@ -185,7 +185,11 @@ class Database:
             ottelun_kirjaus_on_alkanut = True
                  
         if not ottelun_kirjaus_on_alkanut:
+            ottelu.kotijoukkue = kotijoukkue
+            ottelu.vierasjoukkue = vierasjoukkue
             ottelu.otteluinfo = "Ottelu ei ole alkanut"
+            return self.commit(ottelu)
+            
 
         #Alustetaan jaksomuuttujat
         j1_koti = None
@@ -210,10 +214,12 @@ class Database:
         if ottelun_kirjaus_on_alkanut:
         
             try:
+                
                 jaksovoitot = tulostaulu.find('div', {'class': 'period-total'}).find_all('div', {'class': 'inning'})
                 koti_jaksovoitot = jaksovoitot[0].text.strip()
                 vieras_jaksovoitot = jaksovoitot[1].text.strip()
                 ottelu_on_jaksopeli = True
+                
             except AttributeError:
                 koti_jaksovoitot = None
                 vieras_jaksovoitot = None
@@ -306,6 +312,9 @@ class Database:
         #print 
 
         
+        return self.commit(ottelu)
+        
+    def commit(self, ottelu):
         try:
             self.engine.echo = False
             debug_message("Data parsed. Inserting...", constants.DEBUG_MESSAGE_LEVEL_INFO)
