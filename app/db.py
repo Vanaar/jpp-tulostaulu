@@ -163,6 +163,11 @@ class Database:
 
     def lataaOtteludataPesistuloksista(self, ottelunumero, ottelu=None):
         debug_message(f"lataaOtteludataPesistuloksista({ottelunumero}) called by: {inspect.stack()[1].function}", constants.DEBUG_MESSAGE_LEVEL_INFO)
+        
+        if ottelu is None:
+            ottelu = self.get_match_by_ottelunumero(ottelunumero)
+
+        
         url = f"https://www.pesistulokset.fi/ottelut/{ottelunumero}#live"
         
         tulossivu = lataa_www_sivu(url)
@@ -171,13 +176,23 @@ class Database:
         kotijoukkue = soup.find_all('div', {'class': 'match-detail-team'})[0].find_all('a')[1].text.strip()
         vierasjoukkue = soup.find_all('div', {'class': 'match-detail-team'})[1].find('a').text.strip()
 
+        ottelun_kirjaus_on_alkanut = False
+        ottelu_on_jaksopeli = False
+
         tulostaulu = soup.find('div', {'class': 'live-result-board'})
-        ottelu_on_jaksopeli = True
+        
+        if tulostaulu is not None:
+            ottelun_kirjaus_on_alkanut = True
+                 
+        if not ottelun_kirjaus_on_alkanut:
+            ottelu.otteluinfo = "Ottelu ei ole alkanut"
+            return ottelu
         
         try:
             jaksovoitot = tulostaulu.find('div', {'class': 'period-total'}).find_all('div', {'class': 'inning'})
             koti_jaksovoitot = jaksovoitot[0].text.strip()
             vieras_jaksovoitot = jaksovoitot[1].text.strip()
+            ottelu_on_jaksopeli = True
         except AttributeError:
             koti_jaksovoitot = None
             vieras_jaksovoitot = None
@@ -244,8 +259,6 @@ class Database:
             j4_vieras = None
             j4_vieras_yht = None
             
-        if ottelu is None:
-            ottelu = self.get_match_by_ottelunumero(ottelunumero)
             
         ottelu.kotijoukkue = kotijoukkue
         ottelu.vierasjoukkue = vierasjoukkue

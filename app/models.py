@@ -27,4 +27,5 @@ class Otteludata(Base):
     vuoropari_nro = Column(Integer, default=1)
     vuoropari_txt = Column(String(5), default="1. aloittava")
     palot = Column(String(10), default="")
+    otteluinfo = Column(String(50), default="")
     luotu = Column(TIMESTAMP, server_default='CURRENT_TIMESTAMP')
