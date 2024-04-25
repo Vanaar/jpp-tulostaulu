@@ -186,80 +186,90 @@ class Database:
                  
         if not ottelun_kirjaus_on_alkanut:
             ottelu.otteluinfo = "Ottelu ei ole alkanut"
-            return ottelu
+
+        #Alustetaan jaksomuuttujat
+        j1_koti = None
+        j1_koti_yht = 0
+        j1_vieras = None
+        j1_vieras_yht = 0
+        j2_koti = None
+        j2_koti_yht = None
+        j2_vieras = None
+        j2_vieras_yht = None
+        j3_koti = None
+        j3_koti_yht = None
+        j3_vieras = None
+        j3_vieras_yht = None
+        j4_koti = None
+        j4_koti_yht = None
+        j4_vieras = None
+        j4_vieras_yht = None
+        koti_jaksovoitot = None
+        vieras_jaksovoitot = None
         
-        try:
-            jaksovoitot = tulostaulu.find('div', {'class': 'period-total'}).find_all('div', {'class': 'inning'})
-            koti_jaksovoitot = jaksovoitot[0].text.strip()
-            vieras_jaksovoitot = jaksovoitot[1].text.strip()
-            ottelu_on_jaksopeli = True
-        except AttributeError:
-            koti_jaksovoitot = None
-            vieras_jaksovoitot = None
-            ottelu_on_jaksopeli = False
-
-        j1_koti = tulostaulu.find_next('div', {'class': 'innings home d-flex'})
-        j1_koti_pisteet = j1_koti.find_all('a', {'class': 'inning'})
-        j1_koti_yht = j1_koti.find('div', {'class': 'inning'}).text.strip()
-        if j1_koti_yht == '':
-            j1_koti_yht = None
-
-        j1_vieras = tulostaulu.find_next('div', {'class': 'innings away d-flex'})
-        j1_vieras_pisteet = j1_vieras.find_all('a', {'class': 'inning'})
-        j1_vieras_yht = j1_vieras.find('div', {'class': 'inning'}).text.strip()
-        if j1_vieras_yht == '':
-            j1_vieras_yht = None
-
-        if ottelu_on_jaksopeli:
-
-            j2_koti = j1_koti.find_next('div', {'class': 'innings home d-flex'})
-            j2_koti_pisteet = j2_koti.find_all('a', {'class': 'inning'})
-            j2_koti_yht = j2_koti.find('div', {'class': 'inning'}).text.strip()
-            if j2_koti_yht == '':
-                j2_koti_yht = None
-
-            j2_vieras = j1_vieras.find_next('div', {'class': 'innings away d-flex'})
-            j2_vieras_pisteet = j2_vieras.find_all('a', {'class': 'inning'})
-            j2_vieras_yht = j2_vieras.find('div', {'class': 'inning'}).text.strip()
-            if j2_vieras_yht == '':
-                j2_vieras_yht = None
+        if ottelun_kirjaus_on_alkanut:
         
+            try:
+                jaksovoitot = tulostaulu.find('div', {'class': 'period-total'}).find_all('div', {'class': 'inning'})
+                koti_jaksovoitot = jaksovoitot[0].text.strip()
+                vieras_jaksovoitot = jaksovoitot[1].text.strip()
+                ottelu_on_jaksopeli = True
+            except AttributeError:
+                koti_jaksovoitot = None
+                vieras_jaksovoitot = None
+                ottelu_on_jaksopeli = False
 
-            j3_koti = j2_koti.find_next('div', {'class': 'innings home d-flex'})
-            j3_koti_yht = j3_koti.find('a', {'class': 'inning'}).text.strip()
-            if j3_koti_yht == '':
-                j3_koti_yht = None
+            j1_koti = tulostaulu.find_next('div', {'class': 'innings home d-flex'})
+            j1_koti_pisteet = j1_koti.find_all('a', {'class': 'inning'})
+            j1_koti_yht = j1_koti.find('div', {'class': 'inning'}).text.strip()
+            if j1_koti_yht == '':
+                j1_koti_yht = None
 
-            j3_vieras = j2_vieras.find_next('div', {'class': 'innings away d-flex'})
-            j3_vieras_yht = j3_vieras.find('a', {'class': 'inning'}).text.strip()
-            if j3_vieras_yht == '': 
-                j3_vieras_yht = None
+            j1_vieras = tulostaulu.find_next('div', {'class': 'innings away d-flex'})
+            j1_vieras_pisteet = j1_vieras.find_all('a', {'class': 'inning'})
+            j1_vieras_yht = j1_vieras.find('div', {'class': 'inning'}).text.strip()
+            if j1_vieras_yht == '':
+                j1_vieras_yht = None
 
-            j4_koti = j3_koti.find_next('div', {'class': 'innings home d-flex'})
-            j4_koti_yht = j4_koti.find('a', {'class': 'inning'}).text.strip()
-            if j4_koti_yht == '':    
-                j4_koti_yht = None
+            if ottelu_on_jaksopeli:
+                
+                ottelu.otteluinfo = ""
 
-            j4_vieras = j3_vieras.find_next('div', {'class': 'innings away d-flex'})
-            j4_vieras_yht = j4_vieras.find('a', {'class': 'inning'}).text.strip()
-            if j4_vieras_yht == '':
-                j4_vieras_yht = None
-        else:
+                j2_koti = j1_koti.find_next('div', {'class': 'innings home d-flex'})
+                j2_koti_pisteet = j2_koti.find_all('a', {'class': 'inning'})
+                j2_koti_yht = j2_koti.find('div', {'class': 'inning'}).text.strip()
+                if j2_koti_yht == '':
+                    j2_koti_yht = None
+
+                j2_vieras = j1_vieras.find_next('div', {'class': 'innings away d-flex'})
+                j2_vieras_pisteet = j2_vieras.find_all('a', {'class': 'inning'})
+                j2_vieras_yht = j2_vieras.find('div', {'class': 'inning'}).text.strip()
+                if j2_vieras_yht == '':
+                    j2_vieras_yht = None
             
-            j2_koti = None
-            j2_koti_yht = None
-            j2_vieras = None
-            j2_vieras_yht = None
-            j3_koti = None
-            j3_koti_yht = None
-            j3_vieras = None
-            j3_vieras_yht = None
-            j4_koti = None
-            j4_koti_yht = None
-            j4_vieras = None
-            j4_vieras_yht = None
-            
-            
+
+                j3_koti = j2_koti.find_next('div', {'class': 'innings home d-flex'})
+                j3_koti_yht = j3_koti.find('a', {'class': 'inning'}).text.strip()
+                if j3_koti_yht == '':
+                    j3_koti_yht = None
+
+                j3_vieras = j2_vieras.find_next('div', {'class': 'innings away d-flex'})
+                j3_vieras_yht = j3_vieras.find('a', {'class': 'inning'}).text.strip()
+                if j3_vieras_yht == '': 
+                    j3_vieras_yht = None
+
+                j4_koti = j3_koti.find_next('div', {'class': 'innings home d-flex'})
+                j4_koti_yht = j4_koti.find('a', {'class': 'inning'}).text.strip()
+                if j4_koti_yht == '':    
+                    j4_koti_yht = None
+
+                j4_vieras = j3_vieras.find_next('div', {'class': 'innings away d-flex'})
+                j4_vieras_yht = j4_vieras.find('a', {'class': 'inning'}).text.strip()
+                if j4_vieras_yht == '':
+                    j4_vieras_yht = None
+            else:
+                ottelu.otteluinfo = "Junioriottelu"
+                    
         ottelu.kotijoukkue = kotijoukkue
         ottelu.vierasjoukkue = vierasjoukkue
         ottelu.jakso_1_koti_juoksut = j1_koti_yht
