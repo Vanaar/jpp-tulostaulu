@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError, ResourceClosedError
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.orm import Session
 from app.functions import debug_message
+from app.functions import lataa_www_sivu
 from app.models import Otteludata
 from flask import g, current_app
 from config import Config
@@ -64,10 +65,10 @@ class Database:
                 debug_message(f"Ottelua {ottelunumero} ei löytynyt kannasta")
                 return False
         except ResourceClosedError as e:
-            debug_message(f"ResourceClosedError: {e}", Config.DEBUG_MESSAGE_LEVEL_ERROR)
+            debug_message(f"ResourceClosedError: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
             return False
         except Exception as e:
-            debug_message(f"Error: {e}", Config.DEBUG_MESSAGE_LEVEL_ERROR)
+            debug_message(f"Error: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
             return False
         
     def uusi_ottelu(self, pesistulokset=0, ottelunumero=0):
@@ -164,17 +165,9 @@ class Database:
         debug_message(f"lataaOtteludataPesistuloksista({ottelunumero}) called by: {inspect.stack()[1].function}", constants.DEBUG_MESSAGE_LEVEL_INFO)
         url = f"https://www.pesistulokset.fi/ottelut/{ottelunumero}#live"
         
-        options = webdriver.ChromeOptions()
-        options.add_argument("--headless=new")
-        driver = webdriver.Chrome(options=options)
-        
+        tulossivu = lataa_www_sivu(url)
 
-        driver.get(url)
-        time.sleep(1)
-        page_content = driver.page_source
-        driver.quit()
-
-        soup = BeautifulSoup(page_content, "html.parser")
+        soup = BeautifulSoup(tulossivu, "html.parser")
         kotijoukkue = soup.find_all('div', {'class': 'match-detail-team'})[0].find_all('a')[1].text.strip()
         vierasjoukkue = soup.find_all('div', {'class': 'match-detail-team'})[1].find('a').text.strip()
 
