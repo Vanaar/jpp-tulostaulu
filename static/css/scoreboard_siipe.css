@@ -17,26 +17,38 @@ table {
   }
   
   tr.top td {
-      background-color: navy;
-      color: white;	
+      background-color: darkgrey;
   }
   
   td {
       border: 1px solid black;
       background-color: white;
   }
-  
-  /* Set background color for selected cells */
-  td.total-points {
-    background-color: cyan;
+
+  tr.tulosrivi td {
+    background-color: white;
   }
-  
-  td.sisavuoro {
+
+  tr.tulosrivi td.joukkue {
+    background-color: white;
+  }
+
+  tr.tulosrivi td.tulos {
     background-color: gold;
   }
   
+  td.sisavuoro {
+    background-color: lightsalmon !important; ;
+  }
+  /* Set background color for selected cells */
+  td.total-points {
+    background-color: black !important;
+    color: white !important;
+  }
+  
+  
   td.current_period {
-      background-color: navy;
+      background-color: darkgrey;
       color: white;
   }
   

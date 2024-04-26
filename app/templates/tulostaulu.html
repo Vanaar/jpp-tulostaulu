@@ -7,22 +7,22 @@
                 <td>S</td>
                 <td>K</td>
             </tr>
-            <tr>
-                <td class='team_names'>{{ottelu.kotijoukkue}}</td>
+            <tr class="tulosrivi">
+                <td class='joukkue'>{{ottelu.kotijoukkue}}</td>
                 <td class='total-points'>{{ ottelu.koti_jaksovoitot if ottelu.koti_jaksovoitot is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_1_koti_juoksut if ottelu.jakso_1_koti_juoksut is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_2_koti_juoksut if ottelu.jakso_2_koti_juoksut is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_3_koti_juoksut if ottelu.jakso_3_koti_juoksut is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_4_koti_juoksut if ottelu.jakso_4_koti_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_1_koti_juoksut if ottelu.jakso_1_koti_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_2_koti_juoksut if ottelu.jakso_2_koti_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_3_koti_juoksut if ottelu.jakso_3_koti_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_4_koti_juoksut if ottelu.jakso_4_koti_juoksut is not none else '' }}</td>
                 <td class='palot' rowspan="2">{{ottelu.palot|safe}}</td>
             </tr>
-            <tr>
-                <td class='team_names'>{{ottelu.vierasjoukkue}}</td>
+            <tr class="tulosrivi">
+                <td class='joukkue'>{{ottelu.vierasjoukkue}}</td>
                 <td class='total-points'>{{ ottelu.vieras_jaksovoitot if ottelu.vieras_jaksovoitot is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_1_vieras_juoksut if ottelu.jakso_1_vieras_juoksut is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_2_vieras_juoksut if ottelu.jakso_2_vieras_juoksut is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_3_vieras_juoksut if ottelu.jakso_3_vieras_juoksut is not none else '' }}</td>
-                <td {% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}class="sisavuoro"{% endif %}>{{ ottelu.jakso_4_vieras_juoksut if ottelu.jakso_4_vieras_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_1_vieras_juoksut if ottelu.jakso_1_vieras_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_2_vieras_juoksut if ottelu.jakso_2_vieras_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_3_vieras_juoksut if ottelu.jakso_3_vieras_juoksut is not none else '' }}</td>
+                <td class="tulos{% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_4_vieras_juoksut if ottelu.jakso_4_vieras_juoksut is not none else '' }}</td>
             </tr>
             <tr>
                 <td class='current_period' colspan="4">{{ottelu.jakso_txt}} / {{ottelu.vuoropari_txt}}</td>

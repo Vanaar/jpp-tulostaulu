@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Junnut Pelaa Pesistä -tulostaulu</title>
+    {% if style is not none %}
+        <link rel='stylesheet' href='/static/css/scoreboard_{{style}}.css'>
+    {% else %}
     <link rel='stylesheet' href='/static/css/scoreboard_default.css'>
+    {% endif %}
 </head>
 <body>    
 <div id="tulostaulu"></div>

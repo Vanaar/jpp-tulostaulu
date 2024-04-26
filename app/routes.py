@@ -44,6 +44,9 @@ def ottelu_tulostaulu(ottelunumero):
     #Onko debug GET-parametreissä päällä?
     debug = request.args.get('debug', 'off')
     
+    #Onko style määritetty GET-parametreissä?
+    style = request.args.get('style', 'default')
+    
     db = get_db()
     
     # Yritetään ensin löytää ottelu tietokannasta
@@ -54,8 +57,8 @@ def ottelu_tulostaulu(ottelunumero):
     if ottelu:
         otteluKannassa = True
         if (ottelu.pesistulokset == 1): #Otteludataa päivitetään pesistulokset.fi:stä
-            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=True, debug=debug)
-        return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False, debug=debug)   
+            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=True, debug=debug, style=style)
+        return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False, debug=debug, style=style)   
     else:
         #Tarkistaan löytyykö ottelua pesistulokset.fi:stä
         def is_valid_webpage(url):
@@ -71,7 +74,7 @@ def ottelu_tulostaulu(ottelunumero):
             db.uusi_ottelu(pesistulokset=1, ottelunumero=ottelunumero)
             print(f"Ladataan otteludata pesistuloksista: {ottelunumero}")
             uusi_ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
-            return render_template('ottelu.html', ottelu=uusi_ottelu, pesistulokset=True, debug=debug)           
+            return render_template('ottelu.html', ottelu=uusi_ottelu, pesistulokset=True, debug=debug, style=style)           
         else:
             return "Ottelua ei ole tietokannassa eikä myöskään ulkoisessa lähteessä."
 
@@ -80,7 +83,7 @@ def nayta_tulostaulu(ottelunumero):
     db = get_db()
     ottelu = db.get_match_by_ottelunumero(ottelunumero)
     debug = request.args.get('debug', 'off')  # Get the debug parameter, default to 'off'
-    return render_template('tulostaulu.html', ottelu=ottelu, debug=debug)
+    return render_template('tulostaulu.html', ottelu=ottelu, debug=debug, style='default')
 
 @routes_bp.route("/pt/<int:ottelunumero>", methods=['GET'])
 def lataa_otteludata_pesistuloksista(ottelunumero):
