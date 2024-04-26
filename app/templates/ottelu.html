@@ -7,11 +7,21 @@
 </head>
 <body>    
 <div id="tulostaulu"></div>
-<div id="pt_loader"></div>
+
+{% if debug == "on" %} 
+    <div id="pt_loader">Debug-moodi päällä</div>
+{% else %} 
+    <div id="pt_loader" style="display: none"></div>
+{% endif %}
     
 <script>
     function fetchTulostaulu() {
-        fetch('/{{ottelu.ottelunumero}}/tulostaulu')
+        var ottelu_url = '/{{ottelu.ottelunumero}}/tulostaulu';
+        if ("{{debug}}" === "on") {
+            ottelu_url += "?debug=on";
+        }
+
+        fetch(ottelu_url)
             .then(response => response.text()) // Convert the response to text
             .then(data => {
                 document.getElementById('tulostaulu').innerHTML = data; // Set the data as inner HTML

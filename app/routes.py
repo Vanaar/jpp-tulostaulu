@@ -41,6 +41,9 @@ def paivita_ottelu(ottelunumero, muokattava_osio):
 
 @routes_bp.route("/<int:ottelunumero>", methods=['GET'])
 def ottelu_tulostaulu(ottelunumero):
+    #Onko debug GET-parametreissä päällä?
+    debug = request.args.get('debug', 'off')
+    
     db = get_db()
     
     # Yritetään ensin löytää ottelu tietokannasta
@@ -51,8 +54,8 @@ def ottelu_tulostaulu(ottelunumero):
     if ottelu:
         otteluKannassa = True
         if (ottelu.pesistulokset == 1): #Otteludataa päivitetään pesistulokset.fi:stä
-            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=True)
-        return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False)   
+            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=True, debug=debug)
+        return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False, debug=debug)   
     else:
         #Tarkistaan löytyykö ottelua pesistulokset.fi:stä
         def is_valid_webpage(url):
@@ -68,15 +71,16 @@ def ottelu_tulostaulu(ottelunumero):
             db.uusi_ottelu(pesistulokset=1, ottelunumero=ottelunumero)
             print(f"Ladataan otteludata pesistuloksista: {ottelunumero}")
             uusi_ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
-            return render_template('ottelu.html', ottelu=uusi_ottelu, pesistulokset=True)           
+            return render_template('ottelu.html', ottelu=uusi_ottelu, pesistulokset=True, debug=debug)           
         else:
-            return "Ottelua ei ole PT:ssä eikä tietokannassa"
+            return "Ottelua ei ole tietokannassa eikä myöskään ulkoisessa lähteessä."
 
 @routes_bp.route("/<int:ottelunumero>/tulostaulu", methods=['GET'])
 def nayta_tulostaulu(ottelunumero):  
     db = get_db()
     ottelu = db.get_match_by_ottelunumero(ottelunumero)
-    return render_template('tulostaulu.html', ottelu=ottelu)
+    debug = request.args.get('debug', 'off')  # Get the debug parameter, default to 'off'
+    return render_template('tulostaulu.html', ottelu=ottelu, debug=debug)
 
 @routes_bp.route("/pt/<int:ottelunumero>", methods=['GET'])
 def lataa_otteludata_pesistuloksista(ottelunumero):
@@ -84,6 +88,7 @@ def lataa_otteludata_pesistuloksista(ottelunumero):
     print(f"Route PT: Ladataan otteludata pesistuloksista: {ottelunumero}")
 #    try:
     ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
+
     return f"Otteludatan lataus ajettu: {time.strftime('%Y-%m-%d %H:%M:%S')}"
 #    except Exception as e:
 #        return f"Virhedd: {e}"

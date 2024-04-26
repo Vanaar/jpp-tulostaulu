@@ -1,4 +1,4 @@
-# database.py
+# db.py
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, ResourceClosedError
@@ -6,30 +6,38 @@ from sqlalchemy.pool import QueuePool
 from sqlalchemy.orm import Session
 from app.functions import debug_message
 from app.functions import lataa_www_sivu
-from app.models import Otteludata
-from flask import g, current_app
-from config import Config
 from app.functions import vuoropari_int_to_str
 from app.functions import jakso_into_to_str
 from app.functions import parsi_x_palot
+from app.models import Otteludata
+from flask import g, current_app
+from config import Config
 from bs4 import BeautifulSoup
-from selenium import webdriver
 
 import inspect
 import time
 import constants
 
-
-#
-#def get_db():
-#    if 'db' not in current_app.config:
-#        current_app.config['db'] = Database(Config.SQLALCHEMY_DATABASE_URI)
-#    return current_app.config['db']
-
-#
 def get_db():
+    """
+    Palauttaa tietokanta-instanssin. Luo uuden, jos sitä ei ole olemassa.
+
+    Palauttaa:
+        Database: tietokanta-instanssi
+
+    Nostaa:
+        RuntimeError: Jos tietokanta-instanssia ei voida luoda
+    """
+    # Tarkistetaan, onko tietokanta-instanssi jo olemassa
+    # 'g' on globaali muuttuja, joka on käytettävissä koko pyyntöjen elinkaaren ajan
+    # Jos 'db' ei ole 'g':ssä, luodaan uusi tietokanta-instanssi ja tallennetaan se 'g':hen
     if 'db' not in g:
-        g.db = Database(Config.SQLALCHEMY_DATABASE_URI)
+        try:
+            # Luodaan uusi tietokanta-instanssi
+            g.db = Database(Config.SQLALCHEMY_DATABASE_URI)
+        except Exception as e:
+            # Jos tietokanta-instanssia ei voida luoda, nostetaan RuntimeError
+            raise RuntimeError("Tietokantayhteyttä ei voitu luoda") from e
     return g.db
 
 class Database:
@@ -48,6 +56,19 @@ class Database:
         debug_message("Disposing engine")
         self.engine.dispose()
 
+    def commit(self, ottelu):
+        try:
+            self.engine.echo = False
+            self.session.commit()
+            return ottelu
+        except IntegrityError as e:
+            self.session.rollback()
+            print(e)
+            return False
+        except Exception as e:
+            print(e)
+            return False
+        
     def get_match_by_ottelunumero(self, ottelunumero):
         # Close the existing session if it's active
         if self.session:
@@ -316,18 +337,6 @@ class Database:
         except AttributeError:
             ottelu.palot = ""
         
+        debug_message("Data parsittu. Päivitetään kantarivi...", constants.DEBUG_MESSAGE_LEVEL_INFO)
         return self.commit(ottelu)
         
-    def commit(self, ottelu):
-        try:
-            self.engine.echo = False
-            debug_message("Data parsed. Inserting...", constants.DEBUG_MESSAGE_LEVEL_INFO)
-            self.session.commit()
-            return ottelu
-        except IntegrityError as e:
-            self.session.rollback()
-            print(e)
-            return False
-        except Exception as e:
-            print(e)
-            return False

@@ -44,6 +44,9 @@ def parsi_x_palot(palot: int):
     palot_txt = ""
     for i in range(0, palot):
         palot_txt += "X"
+        if (i + 1) % 4 == 0:
+            palot_txt += "<br/>"
+    
     return palot_txt
 
 def lataa_www_sivu(url):
