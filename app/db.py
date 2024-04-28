@@ -333,7 +333,8 @@ class Database:
         #palot
         try:
             palot = soup.find('div', {'class': ['out', 'text-danger']}).text.strip()
-            ottelu.palot = parsi_x_palot(len(palot))
+            palot = palot.replace('×', 'x')
+            ottelu.palot = parsi_x_palot(palot.count('x'))
         except AttributeError:
             ottelu.palot = ""
         
