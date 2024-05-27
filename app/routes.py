@@ -25,7 +25,7 @@ def hellurei():
 @routes_bp.route("/paivita/<int:ottelunumero>", defaults={'muokattava_osio': 1}, methods=['GET', 'POST'])
 def paivita_ottelu(ottelunumero, muokattava_osio):
     if muokattava_osio < 0 or muokattava_osio is None:
-        muokattava_osio = 0
+        muokattava_osio = 1
     elif muokattava_osio > 4:
         muokattava_osio = 4
     
