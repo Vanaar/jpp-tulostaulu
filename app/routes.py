@@ -89,10 +89,10 @@ def nayta_tulostaulu(ottelunumero):
 def lataa_otteludata_pesistuloksista(ottelunumero):
     db = get_db()
     print(f"Route PT: Ladataan otteludata pesistuloksista: {ottelunumero}")
-#    try:
-    ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
+    try:
+        ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
 
-    return f"Otteludatan lataus ajettu: {time.strftime('%Y-%m-%d %H:%M:%S')}"
-#    except Exception as e:
-#        return f"Virhedd: {e}"
+        return f"Otteludatan lataus ajettu: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+    except Exception as e:
+        return f"Virhe: {e}"
     
