@@ -49,6 +49,11 @@ def parsi_x_palot(palot: int):
     
     return palot_txt
 
+def parsi_jaksonumero(jakso_div):
+    period_txt = jakso_div['class'][1]
+    jakso = int(period_txt[-1]) + 1
+    return jakso
+
 def lataa_www_sivu(url):
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
