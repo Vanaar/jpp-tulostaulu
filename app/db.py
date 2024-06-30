@@ -234,8 +234,8 @@ class Database:
                 koti_jaksovoitot = jaksovoitot[0].find('div', {'class': 'inning total'}).text.strip()
                 vieras_jaksovoitot = jaksovoitot[1].find('div', {'class': 'inning total'}).text.strip()
                 ottelu_on_jaksopeli = True
-                
-            except AttributeError:
+            
+            except (AttributeError, IndexError):
                 koti_jaksovoitot = None
                 vieras_jaksovoitot = None
                 ottelu_on_jaksopeli = False
