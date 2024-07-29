@@ -327,10 +327,16 @@ class Database:
         ottelu.jakso_txt = jakso_into_to_str(jakso)        
         
         #palot
+#        try:
+#            palot = soup.find('div', {'class': 'outs'})
+#            palot = len(palot.find_all('span'))
+#            ottelu.palot = parsi_x_palot(palot)
+#        except AttributeError:
+#            ottelu.palot = ""
         try:
-            palot = soup.find('div', {'class': 'outs'})
-            palot = len(palot.find_all('span'))
-            ottelu.palot = parsi_x_palot(palot)
+            palot = soup.find('div', {'class': 'right-side out'})
+            paloja = palot.text.count('×')
+            ottelu.palot = parsi_x_palot(paloja)
         except AttributeError:
             ottelu.palot = ""
         
