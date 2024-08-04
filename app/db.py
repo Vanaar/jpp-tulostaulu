@@ -333,6 +333,10 @@ class Database:
 #            ottelu.palot = parsi_x_palot(palot)
 #        except AttributeError:
 #            ottelu.palot = ""
+
+
+### Haetaan palot uudella tavalla
+
         try:
             palot = soup.find('div', {'class': 'right-side out'})
             paloja = palot.text.count('×')
