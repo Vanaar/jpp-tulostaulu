@@ -1,2 +1,2 @@
 ﻿# jpp-tulostaulu
- Junnut Pelaa Pesistä -tulostaulu suomalaisen pesäpallopelin peleihin.
+ Tulostaulu, joka lukee pesistulokset.fi -sivustolta halutun ottelun tulokset ja tulostaa niistä HTML-tulostaulun, joka on helposti importattavissa esim. streamaussovellukseen.
