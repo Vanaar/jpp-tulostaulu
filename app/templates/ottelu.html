@@ -9,16 +9,21 @@
     <link rel='stylesheet' href='/static/css/scoreboard_default.css'>
     {% endif %}
 </head>
-<body>    
+<body>
 <div id="tulostaulu"></div>
 
-{% if debug == "on" %} 
+{% if debug == "on" %}
     <div id="pt_loader">Debug-moodi päällä</div>
-{% else %} 
+{% else %}
     <div id="pt_loader" style="display: none"></div>
 {% endif %}
-    
+
 <script>
+    // Päivitysväli millisekunteina. Livedata haetaan pesistulokset-API:sta
+    // palvelimen puolella ja välimuistitetaan, joten selaimet eivät kuormita
+    // API:a katsojamäärän mukaan.
+    var PAIVITYSVALI = {{ paivitysvali | default(5000) }};
+
     function fetchTulostaulu() {
         var ottelu_url = '/{{ottelu.ottelunumero}}/tulostaulu';
         if ("{{debug}}" === "on") {
@@ -26,34 +31,20 @@
         }
 
         fetch(ottelu_url)
-            .then(response => response.text()) // Convert the response to text
-            .then(data => {
-                document.getElementById('tulostaulu').innerHTML = data; // Set the data as inner HTML
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                return response.text();
             })
-            .catch(error => console.error('Error fetching sisalto:', error));
+            .then(data => {
+                document.getElementById('tulostaulu').innerHTML = data;
+            })
+            .catch(error => console.error('Virhe tulostaulun noudossa:', error));
     }
 
-    function lataaData() {
-        fetch('/pt/{{ottelu.ottelunumero}}')
-            .then(response => response.text()) // Convert the response to text
-            .then(data => {
-                document.getElementById('pt_loader').innerHTML = data; // Set the data as inner HTML
-            })
-            .catch(error => console.error('Virhe otteludatan noudossa:', error));
-    }
-
-    // Fetch sisalto from server every 5 seconds
-    
-    setInterval(fetchTulostaulu, 5000);
+    setInterval(fetchTulostaulu, PAIVITYSVALI);
     fetchTulostaulu();
-
-    {% if ottelu.pesistulokset == 1 %} 
-        setInterval(lataaData, 10000);
-    {% endif %}
-
-    // Fetch sisalto immediately when the page loads
-    
-    
 </script>
 </body>
 </html>

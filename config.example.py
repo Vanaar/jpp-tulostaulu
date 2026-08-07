@@ -2,6 +2,8 @@ import os
 
 class Config:
     # Database configuration
+    # Tietokantaa tarvitaan enää vain manuaalisesti päivitettävään tulostauluun.
+    # Livetaulu hakee kaiken pesistulokset-API:sta eikä käytä kantaa lainkaan.
     SQLALCHEMY_DATABASE_URI = 'mysql://<username>:<password>@127.0.0.1:3306/jpp-tulostaulu?charset=utf8mb4&binary_prefix=true'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
@@ -15,14 +17,30 @@ class Config:
     # DEBUG_LEVEL = 4 näytä vain virheviestit
     DEBUG = True
     DEBUG_LEVEL = 1
-    
-    #Chromium
-    #Poista kommentti, jos käytät chromedriveria ja sen polku pitää asettaa erikseen
-    #Vaaditaan erityisesti Linux-ympäristössä
-    
-    #CHROMIUM_CUSTOM_CONFIG = True
-    #CHROMIUM_PATH = '/usr/lib/chromium-browser/chromedriver'
-    
-    #Kauanko selenium odottaa sivun sisällön päivittymistä, ennen kuin jatkaa parsimista
-    #default 1 sekunti
-    PAGE_LOAD_WAIT = 1
+
+    # --- Pesäpalloliiton pesistulokset-API ---------------------------------
+    # Avain saadaan Pesäpalloliitolta. Älä committaa oikeaa avainta.
+    PESISTULOKSET_API_KEY = os.environ.get('PESISTULOKSET_API_KEY') or '<api-avain>'
+    PESISTULOKSET_API_URL = 'https://api.pesistulokset.fi/api/v1/public'
+
+    # HTTP-pyynnön aikakatkaisu sekunteina
+    PESISTULOKSET_TIMEOUT = 5
+
+    # Välimuistin elinajat sekunteina. Nämä ratkaisevat, kuinka usein API:a
+    # kutsutaan – katsojien määrä ei vaikuta kutsujen määrään.
+    PESISTULOKSET_LIVE_TTL = 10       # käynnissä olevan ottelun tulos
+    PESISTULOKSET_FINISHED_TTL = 60   # päättyneen ottelun tulos
+    PESISTULOKSET_MATCH_TTL = 300     # ottelun perustiedot (joukkueet ym.)
+    PESISTULOKSET_STALE_TTL = 300     # kuinka kauan vanhaa dataa saa tarjoilla,
+                                      # jos API ei vastaa
+
+    # Kuinka usein selain hakee tulostaulun palvelimelta (millisekuntia)
+    TULOSTAULU_PAIVITYSVALI_MS = 5000
+
+    # --- Manuaalitaulu -----------------------------------------------------
+    # Aseta False, jos haluat ajaa pelkkää livetaulua ilman tietokantaa.
+    MANUAALITAULU_KAYTOSSA = True
+
+    # Kuinka kauan muistetaan, onko ottelunumero manuaali- vai liveottelu.
+    # Estää turhat tietokantakyselyt jokaisella tulostaulun päivityksellä.
+    REITITYS_TTL = 60

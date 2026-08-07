@@ -1,95 +1,179 @@
 from flask import request, redirect, render_template, Blueprint
-from app.db import Database, get_db
-from config import Config
-from app.functions import debug_message
-from bs4 import BeautifulSoup
-from selenium import webdriver
+from threading import RLock
 
-import requests
+from app.functions import debug_message
+from app.live import rakenna_ottelu
+from app.pesistulokset_api import ApiVirhe, hae_live_tulos, hae_ottelu
+from config import Config
+
+import constants
 import time
 
 
 routes_bp = Blueprint('routes', __name__)
 
+
+# Ottelunumeroiden reitityksen välimuisti: kertoo, onko numero manuaaliottelu.
+# Näin livetaulu ei tee tietokantakyselyä joka päivityksellä.
+_REITITYS_TTL = getattr(Config, 'REITITYS_TTL', 60)
+_reititys = {}
+_reititys_lukko = RLock()
+
+
+def _paivitysvali():
+    """Kuinka usein selain hakee tulostaulun palvelimelta (ms)."""
+    return getattr(Config, 'TULOSTAULU_PAIVITYSVALI_MS', 5000)
+
+
+def _manuaalitaulu_kaytossa():
+    """Onko manuaalitaulu (ja sitä myöten tietokanta) käytössä.
+
+    Jos asetus on False, sovellus toimii kokonaan ilman tietokantaa ja
+    näyttää pelkkiä livetauluja.
+    """
+    return getattr(Config, 'MANUAALITAULU_KAYTOSSA', True)
+
+
+def _tyhjenna_reititys(ottelunumero=None):
+    with _reititys_lukko:
+        if ottelunumero is None:
+            _reititys.clear()
+        else:
+            _reititys.pop(ottelunumero, None)
+
+
+def _on_manuaaliottelu(ottelunumero):
+    """Onko ottelunumero kannassa manuaalisesti päivitettävänä otteluna.
+
+    Vastaus välimuistitetaan lyhyeksi aikaa, koska ottelun tyyppi ei muutu
+    kesken ottelun. Kannassa saattaa olla vanhoja rivejä, joita aiemmin
+    päivitettiin www-scrapella (pesistulokset = 1); ne eivät ole
+    manuaaliotteluita vaan ohjautuvat nykyään API-toteutukseen.
+    """
+    if not _manuaalitaulu_kaytossa():
+        return False
+
+    with _reititys_lukko:
+        merkinta = _reititys.get(ottelunumero)
+    if merkinta and (time.monotonic() - merkinta[1]) < _REITITYS_TTL:
+        return merkinta[0]
+
+    on_manuaali = _hae_manuaaliottelu(ottelunumero) is not None
+
+    with _reititys_lukko:
+        _reititys[ottelunumero] = (on_manuaali, time.monotonic())
+    return on_manuaali
+
+
+def _hae_manuaaliottelu(ottelunumero):
+    """Palauttaa manuaaliottelun kantarivin tai None."""
+    if not _manuaalitaulu_kaytossa():
+        return None
+
+    from app.db import get_db
+
+    ottelu = get_db().get_match_by_ottelunumero(ottelunumero)
+    if ottelu and not ottelu.pesistulokset:
+        return ottelu
+    return None
+
+
+def _hae_liveottelu(ottelunumero):
+    """Rakentaa livetulostaulun näkymämallin API:sta. Ei käytä tietokantaa."""
+    ottelu_data = hae_ottelu(ottelunumero)
+    if not ottelu_data:
+        return None
+
+    tulos = hae_live_tulos(ottelunumero)
+    return rakenna_ottelu(ottelunumero, ottelu_data, tulos)
+
+
 @routes_bp.route("/uusi")
 def uusi_ottelu():
-    db = get_db()
-    uusi_ottelu = db.uusi_ottelu()
-    return redirect(f'/paivita/{uusi_ottelu}')
+    if not _manuaalitaulu_kaytossa():
+        return "Manuaalitaulu ei ole käytössä.", 404
+
+    from app.db import get_db
+
+    numero = get_db().uusi_ottelu()
+    _tyhjenna_reititys(numero)
+    return redirect(f'/paivita/{numero}')
+
 
 @routes_bp.route("/hellurei")
 def hellurei():
     return "Oujee!"
 
+
 @routes_bp.route("/paivita/<int:ottelunumero>/<int:muokattava_osio>", methods=['GET', 'POST'])
 @routes_bp.route("/paivita/<int:ottelunumero>", defaults={'muokattava_osio': 1}, methods=['GET', 'POST'])
 def paivita_ottelu(ottelunumero, muokattava_osio):
+    if not _manuaalitaulu_kaytossa():
+        return "Manuaalitaulu ei ole käytössä.", 404
+
+    from app.db import get_db
+
     if muokattava_osio < 0 or muokattava_osio is None:
         muokattava_osio = 1
     elif muokattava_osio > 4:
         muokattava_osio = 4
-    
+
     db = get_db()
     if request.method == 'POST':
         db.update_match(ottelunumero, request.form)
-        
+
     ottelu = db.get_match_by_ottelunumero(ottelunumero)
     if ottelu:
         return render_template('update_ottelu.html', ottelu=ottelu, muokattava_osio=muokattava_osio)
     else:
         return "Ottelua ei löydy tällä numerolla."
 
+
 @routes_bp.route("/<int:ottelunumero>", methods=['GET'])
 def ottelu_tulostaulu(ottelunumero):
-    #Onko debug GET-parametreissä päällä?
+    """Widgetin osoite: /<ottelunumero>. Käyttö säilyy ennallaan."""
     debug = request.args.get('debug', 'off')
-    
-    #Onko style määritetty GET-parametreissä?
     style = request.args.get('style', 'default')
-    
-    db = get_db()
-    
-    # Yritetään ensin löytää ottelu tietokannasta
-    ottelu = db.get_match_by_ottelunumero(ottelunumero)
-    
-    otteluKannassa = False
-    
-    if ottelu:
-        otteluKannassa = True
-        if (ottelu.pesistulokset == 1): #Otteludataa päivitetään pesistulokset.fi:stä
-            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=True, debug=debug, style=style)
-        return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False, debug=debug, style=style)   
-    else:
-        #Tarkistaan löytyykö ottelua pesistulokset.fi:stä
-        def is_valid_webpage(url):
-            response = requests.get(url)
-            if response.status_code == 200:
-                return True
-            else:
-                return False
 
-        if is_valid_webpage(f"https://www.pesistulokset.fi/ottelut/{ottelunumero}"):
-            #Lisätään ottelu kantaan
-            print(f"Lisätään ottelu kantaan pesistuloksista: {ottelunumero}")
-            db.uusi_ottelu(pesistulokset=1, ottelunumero=ottelunumero)
-            print(f"Ladataan otteludata pesistuloksista: {ottelunumero}")
-            uusi_ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
-            return render_template('ottelu.html', ottelu=uusi_ottelu, pesistulokset=True, debug=debug, style=style)           
-        else:
-            return "Ottelua ei ole tietokannassa eikä myöskään ulkoisessa lähteessä."
+    # Manuaalitaulu tunnistetaan kannasta, muuten tiedot haetaan API:sta
+    if _on_manuaaliottelu(ottelunumero):
+        ottelu = _hae_manuaaliottelu(ottelunumero)
+        if ottelu:
+            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False,
+                                   debug=debug, style=style,
+                                   paivitysvali=_paivitysvali())
+
+    try:
+        if hae_ottelu(ottelunumero) is None:
+            return "Ottelua ei ole tietokannassa eikä myöskään pesistuloksissa.", 404
+    except ApiVirhe as e:
+        debug_message(f"ApiVirhe: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
+        return "Pesistulokset-palveluun ei juuri nyt saada yhteyttä.", 503
+
+    return render_template('ottelu.html', ottelu={'ottelunumero': ottelunumero},
+                           pesistulokset=True, debug=debug, style=style,
+                           paivitysvali=_paivitysvali())
+
 
 @routes_bp.route("/<int:ottelunumero>/tulostaulu", methods=['GET'])
-def nayta_tulostaulu(ottelunumero):  
-    db = get_db()
-    ottelu = db.get_match_by_ottelunumero(ottelunumero)
-    debug = request.args.get('debug', 'off')  # Get the debug parameter, default to 'off'
-    return render_template('tulostaulu.html', ottelu=ottelu, debug=debug, style='default')
+def nayta_tulostaulu(ottelunumero):
+    """Selain hakee tämän muutaman sekunnin välein ja korvaa taulun sisällön."""
+    debug = request.args.get('debug', 'off')
 
-@routes_bp.route("/pt/<int:ottelunumero>", methods=['GET'])
-def lataa_otteludata_pesistuloksista(ottelunumero):
-    db = get_db()
-    print(f"Route PT: Ladataan otteludata pesistuloksista: {ottelunumero}")
-    ottelu = db.lataaOtteludataPesistuloksista(ottelunumero)
+    if _on_manuaaliottelu(ottelunumero):
+        ottelu = _hae_manuaaliottelu(ottelunumero)
+        if ottelu:
+            return render_template('tulostaulu.html', ottelu=ottelu, debug=debug,
+                                   pesistulokset=False, style='default')
 
-    return f"Otteludatan lataus ajettu: {time.strftime('%Y-%m-%d %H:%M:%S')}"
-    
+    try:
+        ottelu = _hae_liveottelu(ottelunumero)
+    except ApiVirhe as e:
+        debug_message(f"ApiVirhe: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
+        return "", 503
+
+    if ottelu is None:
+        return "", 404
+
+    return render_template('tulostaulu.html', ottelu=ottelu, debug=debug,
+                           pesistulokset=True, style='default')
