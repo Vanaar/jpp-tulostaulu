@@ -5,17 +5,13 @@ from sqlalchemy.exc import IntegrityError, ResourceClosedError
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.orm import Session
 from app.functions import debug_message
-from app.functions import lataa_www_sivu
 from app.functions import vuoropari_int_to_str
 from app.functions import jakso_into_to_str
-from app.functions import parsi_x_palot
 from app.models import Otteludata
-from flask import g, current_app
+from flask import g
 from config import Config
-from bs4 import BeautifulSoup
 
 import inspect
-import time
 import constants
 
 def get_db():
@@ -181,163 +177,4 @@ class Database:
             if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue:
                 ottelu.nykyinen_lyontivuoro = ottelu.vierasjoukkue
             else:
-                ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue                
-
-    def lataaOtteludataPesistuloksista(self, ottelunumero, ottelu=None):
-        debug_message(f"lataaOtteludataPesistuloksista({ottelunumero}) called by: {inspect.stack()[1].function}", constants.DEBUG_MESSAGE_LEVEL_INFO)
-        
-        if ottelu is None:
-            ottelu = self.get_match_by_ottelunumero(ottelunumero)
-
-        
-        url = f"https://www.pesistulokset.fi/ottelut/{ottelunumero}#live"
-        
-        tulossivu = lataa_www_sivu(url)
-
-        soup = BeautifulSoup(tulossivu, "html.parser")
-        kotijoukkue = soup.find_all('div', {'class': 'match-detail-team'})[0].find_all('a')[1].text.strip()
-        vierasjoukkue = soup.find_all('div', {'class': 'match-detail-team'})[1].find('a').text.strip()
-
-        ottelun_kirjaus_on_alkanut = False
-        ottelu_on_jaksopeli = False
-
-        tulostaulu = soup.find('div', {'class': 'live-result-board'})
-        
-        if tulostaulu is not None:
-            ottelun_kirjaus_on_alkanut = True
-                 
-        if not ottelun_kirjaus_on_alkanut:
-            ottelu.kotijoukkue = kotijoukkue
-            ottelu.vierasjoukkue = vierasjoukkue
-            ottelu.otteluinfo = "Ottelu ei ole alkanut"
-            return self.commit(ottelu)
-            
-
-        #Alustetaan jaksomuuttujat
-        j1_koti = None
-        j1_koti_yht = 0
-        j1_vieras = None
-        j1_vieras_yht = 0
-        j2_koti = None
-        j2_koti_yht = None
-        j2_vieras = None
-        j2_vieras_yht = None
-        j3_koti = None
-        j3_koti_yht = None
-        j3_vieras = None
-        j3_vieras_yht = None
-        j4_koti = None
-        j4_koti_yht = None
-        j4_vieras = None
-        j4_vieras_yht = None
-        koti_jaksovoitot = None
-        vieras_jaksovoitot = None
-        
-        if ottelun_kirjaus_on_alkanut:
-        
-            try:
-                
-                jaksovoitot = tulostaulu.find('div', {'class': 'period-total'}).find_all('div', {'class': 'inning'})
-                koti_jaksovoitot = jaksovoitot[0].text.strip()
-                vieras_jaksovoitot = jaksovoitot[1].text.strip()
-                ottelu_on_jaksopeli = True
-                
-            except AttributeError:
-                koti_jaksovoitot = None
-                vieras_jaksovoitot = None
-                ottelu_on_jaksopeli = False
-
-            j1_koti = tulostaulu.find_next('div', {'class': 'innings home d-flex'})
-            j1_koti_pisteet = j1_koti.find_all('a', {'class': 'inning'})
-            j1_koti_yht = j1_koti.find('div', {'class': 'inning'}).text.strip()
-            if j1_koti_yht == '':
-                j1_koti_yht = None
-
-            j1_vieras = tulostaulu.find_next('div', {'class': 'innings away d-flex'})
-            j1_vieras_pisteet = j1_vieras.find_all('a', {'class': 'inning'})
-            j1_vieras_yht = j1_vieras.find('div', {'class': 'inning'}).text.strip()
-            if j1_vieras_yht == '':
-                j1_vieras_yht = None
-
-            if ottelu_on_jaksopeli:
-                
-                ottelu.otteluinfo = ""
-
-                j2_koti = j1_koti.find_next('div', {'class': 'innings home d-flex'})
-                j2_koti_pisteet = j2_koti.find_all('a', {'class': 'inning'})
-                j2_koti_yht = j2_koti.find('div', {'class': 'inning'}).text.strip()
-                if j2_koti_yht == '':
-                    j2_koti_yht = None
-
-                j2_vieras = j1_vieras.find_next('div', {'class': 'innings away d-flex'})
-                j2_vieras_pisteet = j2_vieras.find_all('a', {'class': 'inning'})
-                j2_vieras_yht = j2_vieras.find('div', {'class': 'inning'}).text.strip()
-                if j2_vieras_yht == '':
-                    j2_vieras_yht = None
-            
-
-                j3_koti = j2_koti.find_next('div', {'class': 'innings home d-flex'})
-                j3_koti_yht = j3_koti.find('a', {'class': 'inning'}).text.strip()
-                if j3_koti_yht == '':
-                    j3_koti_yht = None
-
-                j3_vieras = j2_vieras.find_next('div', {'class': 'innings away d-flex'})
-                j3_vieras_yht = j3_vieras.find('a', {'class': 'inning'}).text.strip()
-                if j3_vieras_yht == '': 
-                    j3_vieras_yht = None
-
-                j4_koti = j3_koti.find_next('div', {'class': 'innings home d-flex'})
-                j4_koti_yht = j4_koti.find('a', {'class': 'inning'}).text.strip()
-                if j4_koti_yht == '':    
-                    j4_koti_yht = None
-
-                j4_vieras = j3_vieras.find_next('div', {'class': 'innings away d-flex'})
-                j4_vieras_yht = j4_vieras.find('a', {'class': 'inning'}).text.strip()
-                if j4_vieras_yht == '':
-                    j4_vieras_yht = None
-            else:
-                ottelu.otteluinfo = "Junioriottelu"
-                    
-        ottelu.kotijoukkue = kotijoukkue
-        ottelu.vierasjoukkue = vierasjoukkue
-        ottelu.jakso_1_koti_juoksut = j1_koti_yht
-        ottelu.jakso_1_vieras_juoksut = j1_vieras_yht
-        ottelu.jakso_2_koti_juoksut = j2_koti_yht
-        ottelu.jakso_2_vieras_juoksut = j2_vieras_yht
-        ottelu.jakso_3_koti_juoksut = j3_koti_yht
-        ottelu.jakso_3_vieras_juoksut = j3_vieras_yht
-        ottelu.jakso_4_koti_juoksut = j4_koti_yht
-        ottelu.jakso_4_vieras_juoksut = j4_vieras_yht
-        ottelu.koti_jaksovoitot = koti_jaksovoitot
-        ottelu.vieras_jaksovoitot = vieras_jaksovoitot
-        
-        #nykyinen vuoropari
-        vuoropari_txt = soup.find('div', {'class': 'text-muted font-weight-bold text-center'}).text.strip()
-        ottelu.vuoropari_txt = vuoropari_txt
-        
-        #lyöntivuoro
-        jakso = 0
-        for i, (j_koti, j_vieras) in enumerate(zip([j1_koti, j2_koti, j3_koti, j4_koti], [j1_vieras, j2_vieras, j3_vieras, j4_vieras]), start=1):
-            if j_koti.find('a', {'class': 'bg-orange'}):
                 ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue
-                jakso = i
-                break
-            elif j_vieras.find('a', {'class': 'bg-orange'}):
-                ottelu.nykyinen_lyontivuoro = ottelu.vierasjoukkue
-                jakso = i
-                break
-            
-        ottelu.jakso_nro = jakso
-        ottelu.jakso_txt = jakso_into_to_str(jakso)
-        
-        #palot
-        try:
-            palot = soup.find('div', {'class': ['out', 'text-danger']}).text.strip()
-            palot = palot.replace('×', 'x')
-            ottelu.palot = parsi_x_palot(palot.count('x'))
-        except AttributeError:
-            ottelu.palot = ""
-        
-        debug_message("Data parsittu. Päivitetään kantarivi...", constants.DEBUG_MESSAGE_LEVEL_INFO)
-        return self.commit(ottelu)
-        

@@ -161,3 +161,9 @@ cython_debug/
 
 #config file
 config.py
+
+#test file
+py_test.py
+py_test_v2.py
+
+test.html

@@ -30,8 +30,14 @@
                 {% endif %}
             </tr>
             <tr>
-                <td class='current_period' colspan="4">{{ottelu.jakso_txt}} / {{ottelu.vuoropari_txt}}</td>
-                <td class='current_period' colspan="2"></td>
+                <td class='current_period' colspan="4">
+                    {%- if ottelu.jakso_txt -%}
+                        {{ottelu.jakso_txt}}{% if ottelu.vuoropari_txt %} / {{ottelu.vuoropari_txt}}{% endif %}
+                    {%- else -%}
+                        {{ottelu.otteluinfo}}
+                    {%- endif -%}
+                </td>
+                <td class='current_period' colspan="2">{% if ottelu.jakso_txt %}{{ottelu.otteluinfo}}{% endif %}</td>
             </tr>
             <tr>
                 <td class="promo" colspan="6">
@@ -41,7 +47,7 @@
             {% if debug == "on" %}
             <tr class="debug">
                 <td colspan="6">
-                    Päivitys: {% if ottelu.pesistulokset == 1 %} Automaattinen {% else %} Manuaalinen {% endif %}
+                    Päivitys: {% if pesistulokset %} Pesistulokset-API {% else %} Manuaalinen {% endif %}
                 </td>
             </tr>
             {% endif %} 

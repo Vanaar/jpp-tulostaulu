@@ -21,7 +21,7 @@ CREATE TABLE otteludata (
     jakso_nro INT NOT NULL DEFAULT 1,
     jakso_txt VARCHAR(20) NOT NULL DEFAULT 'J1',
     vuoropari_nro INT NOT NULL DEFAULT 1,
-    vuoropari_txt VARCHAR(20) NOT NULL DEFAULT '1. aloittava',
+    vuoropari_txt VARCHAR(100) NOT NULL DEFAULT '1. aloittava',
     palot VARCHAR(30),
     otteluinfo VARCHAR(50) NULL DEFAULT '',
     luotu TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
