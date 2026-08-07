@@ -167,3 +167,7 @@ py_test.py
 py_test_v2.py
 
 test.html
+
+# Pakatut paketit eivät kuulu versionhallintaan. jpp-tulostaulu.zip päätyi
+# aikanaan repoon vahingossa, ja sen sisällä oli config.py tunnuksineen.
+*.zip
