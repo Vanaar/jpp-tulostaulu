@@ -3,7 +3,11 @@
 Reittien ja tulostaulun renderöinnin savutestit.
 
 HTTP-kutsut pesistulokset-API:in on korvattu paikallisella vastaajalla, joten
-testit eivät tarvitse verkkoyhteyttä eivätkä API-avainta.
+testit eivät tarvitse verkkoyhteyttä.
+
+`config.py`:ssä on silti oltava `PESISTULOKSET_API_KEY`. Avain luetaan ennen
+kuin mockattu `requests.get` ehtii vastata, joten ilman sitä reitit palauttavat
+503:n ja testit kaatuvat. Avaimen arvolla ei ole väliä.
 
 Aja projektin juuresta:
 

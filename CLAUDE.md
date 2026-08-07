@@ -14,9 +14,17 @@ samalla tavalla.
 
 ## Haarat
 
-`pt3.0` on nykyinen kehityshaara (API-toteutus). `pt2.0` on edellinen versio,
-joka scrapesi pesistulokset.fi:tä Seleniumilla. `main` on vanha. Jos etsit
-"miten tämä ennen toimi", katso `pt2.0`, älä `main`.
+`main` on tulostaulun virallinen versio ja päähaara (3.0, API-toteutus).
+Haarauta uusi työ siitä. `pt3.0` on 3.0-työn alkuperäinen haara ja osoittaa
+samaan sisältöön; sitä ei enää tarvita erikseen.
+
+`pt2.0` on edellinen versio, joka scrapesi pesistulokset.fi:tä Seleniumilla.
+**Tuotanto ajaa toistaiseksi sitä**, ja se säilytetään paluureittinä — älä
+poista äläkä muuta sitä. Jos etsit "miten tämä ennen toimi", katso `pt2.0`.
+
+Huom: `main` oli pitkään jäljessä, koska tuotantoon vietiin aikanaan `pt2.0`
+eikä mainia päivitetty. Tilanne korjattiin 7.8.2026 mergellä `pt3.0` → `main`.
+Sitä vanhemmat main-commitit ovat 1.0-aikaa eivätkä kerro nykytilasta.
 
 ## Ajaminen ja testit
 
@@ -127,6 +135,10 @@ manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
 - **Lyömässä olevan joukkueen päättelyä ei ole vahvistettu oikealla käynnissä
   olevalla ottelulla** — vain esimerkkidatalla ja käsin rakennetulla
   testitilanteella. Tämä on tärkein asia todentaa seuraavan ottelun aikana.
+  Tilanne 7.8.2026: päättynyt ja alkamaton ottelu on todennettu oikealla
+  datalla ja toimivat. Käynnissä oleva ottelu eli `match-live-result`:n
+  elävä tilanne on yhä näkemättä; katso silloin erityisesti sisävuoron
+  korostus, jakso- ja vuoroparinumerointi sekä palojen kertyminen.
 - Supervuoron ja kotiutuskisan käyttäytyminen API:ssa on päätelty
   `runs`-taulukon rakenteesta, ei nähty oikeassa ottelussa.
 - `/uusi` ja `/paivita` ovat ilman mitään tunnistautumista.
