@@ -171,3 +171,7 @@ test.html
 # Pakatut paketit eivät kuulu versionhallintaan. jpp-tulostaulu.zip päätyi
 # aikanaan repoon vahingossa, ja sen sisällä oli config.py tunnuksineen.
 *.zip
+
+# Claude Code: launch.json on jaettu kehityskäynnistys, paikalliset
+# asetukset ja istuntokohtaiset luvat eivät kuulu versionhallintaan.
+.claude/settings.local.json
