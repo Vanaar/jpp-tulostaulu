@@ -63,6 +63,72 @@ OTTELU_129199 = {
 }
 
 
+# Ottelu 146541, ratkesi SUPERVUOROON. Oikeaa API-dataa 8.8.2026.
+# Jaksot menivät 1-1 (6-4, 2-4), supervuoro 1-0 kotijoukkueelle.
+# Kotiutuskisaa ei pelattu, joten runs[3] on tyhjä.
+OTTELU_146541 = {
+    "id": 146541,
+    "canceled": False,
+    "started": True,
+    "details": {"inning_count": 4, "draw_of_choice_winner": "away"},
+    "meta": {
+        "first_bat_turns": [16942, 16910, 16942, 16942],
+        "super_inning_in_use": True,
+    },
+    "home": {"id": 16910, "name": "Ikaalisten Tarmo", "shorthand": "Tarmo"},
+    "away": {"id": 16942, "name": "Haapajärven Pesä-Kiilat", "shorthand": "Pesä-Kiilat"},
+}
+
+TULOS_146541 = {
+    "periods": {"home": 2, "away": 1},
+    "runs": [
+        {"home": [5, 0, 1, None], "away": [1, 1, 2, 0]},
+        {"home": [0, 1, 0, 1], "away": [2, 2, 0, None]},
+        {"home": [1], "away": [0]},
+        {"home": [None], "away": [None]},
+    ],
+    "outCount": 2,
+    "currentPeriod": 2,
+    "currentInning": 0,
+    "batTurn": 1,
+    "batTurnTeamKey": "home",
+    "finished": True,
+    "isPeriodMatch": True,
+}
+
+# Ottelu 127482, ratkesi KOTIUTUSKISAAN. Oikeaa API-dataa 8.8.2026.
+# Jaksot 1-1 (4-0, 3-4), supervuoro 0-0 tasan, kotiutuskisa 1-2 vieraalle.
+OTTELU_127482 = {
+    "id": 127482,
+    "canceled": False,
+    "started": True,
+    "details": {"inning_count": 4, "draw_of_choice_winner": "away"},
+    "meta": {
+        "first_bat_turns": [14284, 14286, 14286, 14286],
+        "super_inning_in_use": True,
+    },
+    "home": {"id": 14286, "name": "Imatran Pallo-Veikot", "shorthand": "IPV"},
+    "away": {"id": 14284, "name": "Haminan Palloilijat", "shorthand": "HaPa"},
+}
+
+TULOS_127482 = {
+    "periods": {"home": 1, "away": 2},
+    "runs": [
+        {"home": [3, 0, 1, None], "away": [0, 0, 0, 0]},
+        {"home": [0, 0, 2, 1], "away": [0, 3, 1, None]},
+        {"home": [0], "away": [0]},
+        {"home": [1], "away": [2]},
+    ],
+    "outCount": 0,
+    "currentPeriod": 3,
+    "currentInning": 0,
+    "batTurn": 1,
+    "batTurnTeamKey": "away",
+    "finished": True,
+    "isPeriodMatch": True,
+}
+
+
 def kaynnissa_oleva_tulos():
     """Keksitty tilanne: 1. jakso, 2. vuoropari, koti lyömässä lopettavana.
 
@@ -181,6 +247,122 @@ class TestKaynnissaOlevaOttelu(unittest.TestCase):
         self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 2)
         self.assertIsNone(self.ottelu.jakso_2_koti_juoksut)
         self.assertIsNone(self.ottelu.jakso_3_koti_juoksut)
+
+
+class TestSupervuoroOttelu(unittest.TestCase):
+    """Ottelu 146541, oikeaa dataa: jaksot 1-1, supervuoro ratkaisi."""
+
+    def setUp(self):
+        self.ottelu = rakenna_ottelu(146541, OTTELU_146541, TULOS_146541)
+
+    def test_jaksojen_juoksut(self):
+        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 6)
+        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 4)
+        self.assertEqual(self.ottelu.jakso_2_koti_juoksut, 2)
+        self.assertEqual(self.ottelu.jakso_2_vieras_juoksut, 4)
+
+    def test_supervuoron_juoksut(self):
+        self.assertEqual(self.ottelu.jakso_3_koti_juoksut, 1)
+        self.assertEqual(self.ottelu.jakso_3_vieras_juoksut, 0)
+
+    def test_pelaamaton_kotiutuskisa_on_tyhja(self):
+        # Tämä kaatuisi, jos päättyneessä ottelussa jaksoindeksiin lisättäisiin
+        # yksi: kotiutuskisa merkittäisiin alkaneeksi ja näyttäisi nollaa.
+        self.assertIsNone(self.ottelu.jakso_4_koti_juoksut)
+        self.assertIsNone(self.ottelu.jakso_4_vieras_juoksut)
+
+    def test_jaksovoitot_sisaltavat_supervuoron(self):
+        self.assertEqual(self.ottelu.koti_jaksovoitot, 2)
+        self.assertEqual(self.ottelu.vieras_jaksovoitot, 1)
+
+    def test_tilateksti(self):
+        self.assertEqual(self.ottelu.jakso_txt, "Ottelu on päättynyt")
+        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, "-")
+
+
+class TestKotiutuskisaOttelu(unittest.TestCase):
+    """Ottelu 127482, oikeaa dataa: supervuoro 0-0, kotiutuskisa ratkaisi."""
+
+    def setUp(self):
+        self.ottelu = rakenna_ottelu(127482, OTTELU_127482, TULOS_127482)
+
+    def test_kaikki_sarakkeet(self):
+        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 4)
+        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 0)
+        self.assertEqual(self.ottelu.jakso_2_koti_juoksut, 3)
+        self.assertEqual(self.ottelu.jakso_2_vieras_juoksut, 4)
+        self.assertEqual(self.ottelu.jakso_3_koti_juoksut, 0)
+        self.assertEqual(self.ottelu.jakso_3_vieras_juoksut, 0)
+        self.assertEqual(self.ottelu.jakso_4_koti_juoksut, 1)
+        self.assertEqual(self.ottelu.jakso_4_vieras_juoksut, 2)
+
+    def test_tasan_mennyt_supervuoro_naytetaan_nollana(self):
+        # 0-0 ei ole sama kuin pelaamaton: sarake ei saa jäädä tyhjäksi
+        self.assertIsNotNone(self.ottelu.jakso_3_koti_juoksut)
+
+    def test_jaksovoitot_sisaltavat_kotiutuskisan(self):
+        self.assertEqual(self.ottelu.koti_jaksovoitot, 1)
+        self.assertEqual(self.ottelu.vieras_jaksovoitot, 2)
+
+    def test_kotiutuskisan_aloittaja_on_supervuoron_aloittaja(self):
+        # Pelisäännöt 8 §. Molemmissa oikeissa otteluissa indeksit 2 ja 3 ovat
+        # samat, eikä aloittajaa siksi saa päätellä vuorottelemalla.
+        listat = (
+            OTTELU_127482["meta"]["first_bat_turns"],
+            OTTELU_146541["meta"]["first_bat_turns"],
+        )
+        for lista in listat:
+            self.assertEqual(lista[2], lista[3])
+
+
+class TestKaynnissaOlevaSupervuoro(unittest.TestCase):
+    """Supervuoroa ei ole nähty livenä; tämä lukitsee johdetun käytöksen.
+
+    currentPeriod 1 = jakso 2 on päättynyt -> menossa on supervuoro (jakso 3).
+    """
+
+    def _tulos(self, super_runs, inning=0, bat_turn=0):
+        return {
+            "periods": {"home": 1, "away": 1},
+            "runs": [
+                {"home": [5, 0, 1, None], "away": [1, 1, 2, 0]},
+                {"home": [0, 1, 0, 1], "away": [2, 2, 0, None]},
+                super_runs,
+                {"home": [None], "away": [None]},
+            ],
+            "outCount": 1,
+            "currentPeriod": 1,
+            "currentInning": inning,
+            "batTurn": bat_turn,
+            "batTurnTeamKey": "away",
+            "finished": False,
+            "isPeriodMatch": True,
+        }
+
+    def test_tauko_ennen_supervuoroa(self):
+        # Supervuoro ei ole alkanut -> jaksotauko: ei vuoroparia, ei paloja
+        tulos = self._tulos({"home": [None], "away": [None]})
+        ottelu = rakenna_ottelu(146541, OTTELU_146541, tulos)
+        self.assertEqual(ottelu.jakso_txt, "Supervuoro")
+        self.assertEqual(ottelu.vuoropari_txt, "")
+        self.assertEqual(ottelu.palot, "")
+
+    def test_supervuoro_kaynnissa(self):
+        # Supervuorossa on vain yksi vuoropari, joten numeroa ei näytetä
+        tulos = self._tulos({"home": [0], "away": [None]}, bat_turn=1)
+        ottelu = rakenna_ottelu(146541, OTTELU_146541, tulos)
+        self.assertEqual(ottelu.jakso_txt, "Supervuoro")
+        self.assertEqual(ottelu.vuoropari_txt, "lopettava")
+        self.assertEqual(ottelu.nykyinen_lyontivuoro, ottelu.vierasjoukkue)
+        self.assertEqual(ottelu.palot, "X")
+
+    def test_kotiutuskisa_kaynnissa(self):
+        # currentPeriod 2 = supervuoro päättyi -> menossa kotiutuskisa
+        tulos = self._tulos({"home": [0], "away": [0]})
+        tulos["currentPeriod"] = 2
+        tulos["runs"][3] = {"home": [1], "away": [None]}
+        ottelu = rakenna_ottelu(127482, OTTELU_127482, tulos)
+        self.assertEqual(ottelu.jakso_txt, "Kotiutuskisa")
 
 
 class TestJaksotauko(unittest.TestCase):

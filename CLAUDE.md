@@ -98,7 +98,20 @@ käytä niitä totuutena, älä arvaa kenttien muotoa.
   indeksi lukisi Pythonissa listaa lopusta.
 - **Supervuoron aloittajaa ei voi päätellä vuorottelusta.** Sen valitsee
   hutunkeiton voittanut kapteeni vasta 2. jakson jälkeen (30 §), joten
-  `first_bat_turns[2]` ja `[3]` ovat `null` siihen asti.
+  `first_bat_turns[2]` ja `[3]` ovat `null` siihen asti. Kun ne täyttyvät,
+  ne ovat **aina keskenään samat**: kotiutuskisan aloittaa supervuoron
+  aloittaja (8 §). `details.draw_of_choice_winner` kertoo hutunkeiton
+  voittajan, mutta ei aloittajaa — voittaja saa valita myös ulkovuoron,
+  ja niin kävi ottelussa 127482.
+- **Supervuoro ja kotiutuskisa jatkavat samaa jaksonumerointia.**
+  `currentPeriod` on supervuoron jälkeen 2 ja kotiutuskisan jälkeen 3, eli
+  `+2`-sääntö pätee koko ottelun elinkaaren. `runs`-pituudet ovat
+  `[4, 4, 1, 1]`: supervuoro**pari** on yksi vuoropari ja kotiutuskisa yksi
+  kokonaisuus. `periods` laskee supervuoron tai kotiutuskisan voiton
+  jaksovoitoksi, joten lopputulos voi olla 2-1 tai 1-2.
+- **Tasan mennyt supervuoro (0-0) ei ole sama kuin pelaamaton.** Ottelussa
+  127482 supervuoro päättyi 0-0 ja jatkui kotiutuskisaan; S-sarakkeessa
+  lukee tällöin 0, ei tyhjä. Pelaamaton erä on `null` (ottelu 146541).
 - **`batTurn`: 0 = aloittava, 1 = lopettava.** `batTurnTeamKey` (`"home"`/
   `"away"`) kertoo lyövän joukkueen suoraan. Varapolku on `meta.first_bat_turns`,
   jossa on jaksoittain lyönnin aloittavan joukkueen id — vertaa `home.id` /
@@ -159,10 +172,11 @@ manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
   8.8.2026** viidellä oikealla ottelulla: alkamaton, käynnissä oleva jaksossa
   1 ja 2, jaksotauko, jakson vaihtuminen ja päättynyt. Sisävuoron korostus,
   jakso- ja vuoroparinumerointi sekä palojen kertyminen toimivat.
-- Supervuoron ja kotiutuskisan käyttäytyminen API:ssa on päätelty
-  `runs`-taulukon rakenteesta, ei nähty oikeassa ottelussa. `runs`-pituudet
-  ovat `[4, 4, 1, 1]`, mikä vastaa sääntöjen supervuoro**paria** ja yhtä
-  kotiutuskisaa. Tämä on suurin jäljellä oleva todentamaton kohta.
+- ~~Supervuoron ja kotiutuskisan käyttäytyminen on päätelty~~ **Todennettu
+  8.8.2026** otteluilla 146541 (ratkesi supervuoroon) ja 127482 (ratkesi
+  kotiutuskisaan). Molemmat ovat testidatana `tests/test_live.py`:ssä.
+  Päättyneet ottelut on nähty; supervuoroa tai kotiutuskisaa **käynnissä**
+  ei vieläkään, mutta logiikka on sama ja lukittu testeillä.
 - **`details.inning_count` ja `meta.super_inning_in_use` ovat käyttämättä.**
   Säännöt sallivat juniori- ja turnausotteluissa 3 tai 2 vuoroparin jaksot,
   ja Superpesiksen runkosarjassa supervuoroa ei pelata lainkaan. Koodi
