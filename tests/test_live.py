@@ -64,7 +64,12 @@ OTTELU_129199 = {
 
 
 def kaynnissa_oleva_tulos():
-    """Keksitty tilanne: 1. jakso, 2. vuoropari, koti lyömässä lopettavana."""
+    """Keksitty tilanne: 1. jakso, 2. vuoropari, koti lyömässä lopettavana.
+
+    currentPeriod on -1, koska se kertoo viimeksi PÄÄTTYNEEN jakson indeksin:
+    1. jaksossa yhtään jaksoa ei ole vielä päättynyt. Todennettu oikealla
+    datalla 8.8.2026 (ottelut 130345, 131618, 130446, 130487).
+    """
     return {
         "periods": {"home": 0, "away": 0},
         "runs": [
@@ -74,7 +79,7 @@ def kaynnissa_oleva_tulos():
             {"home": [None], "away": [None]},
         ],
         "outCount": 2,
-        "currentPeriod": 0,
+        "currentPeriod": -1,
         "currentInning": 1,
         "batTurn": 1,
         "batTurnTeamKey": "home",
@@ -127,6 +132,12 @@ class TestPaattynytOttelu(unittest.TestCase):
         self.assertEqual(self.ottelu.jakso_txt, "Ottelu on päättynyt")
         self.assertEqual(self.ottelu.vuoropari_txt, "")
 
+    def test_ei_sisavuoroa_eika_paloja(self):
+        # batTurn ja outCount jäävät API:ssa viimeiseen tilaansa, mutta
+        # päättyneessä ottelussa ei ole sisävuoroa -> ei korostusta, ei paloja.
+        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, "-")
+        self.assertEqual(self.ottelu.palot, "")
+
     def test_joukkueiden_nimet(self):
         self.assertEqual(self.ottelu.kotijoukkue, "Jussittaret, Seinäjoki")
         self.assertEqual(self.ottelu.vierasjoukkue, "Lapuan Virkiä")
@@ -172,16 +183,79 @@ class TestKaynnissaOlevaOttelu(unittest.TestCase):
         self.assertIsNone(self.ottelu.jakso_3_koti_juoksut)
 
 
+class TestJaksotauko(unittest.TestCase):
+    """Jakso on ratkennut, seuraava ei ole vielä alkanut.
+
+    Todennettu otteluissa 130446 ja 130487 8.8.2026: currentInning jää tauon
+    ajaksi edellisen jakson viimeiseen vuoropariin eikä nollaudu ennen kuin
+    uuden jakson ensimmäinen tulos kirjataan.
+    """
+
+    def setUp(self):
+        tulos = {
+            "periods": {"home": 1, "away": 0},
+            "runs": [
+                {"home": [2, 0, 0, 1], "away": [0, 1, 0, 0]},
+                {"home": [None, None, None, None], "away": [None, None, None, None]},
+                {"home": [None], "away": [None]},
+                {"home": [None], "away": [None]},
+            ],
+            "outCount": 3,
+            "currentPeriod": 0,
+            "currentInning": 3,
+            "batTurn": 1,
+            "batTurnTeamKey": "away",
+            "finished": False,
+            "isPeriodMatch": True,
+        }
+        self.ottelu = rakenna_ottelu(130446, OTTELU_129209, tulos)
+
+    def test_alkava_jakso_naytetaan(self):
+        self.assertEqual(self.ottelu.jakso_txt, "2. jakso")
+
+    def test_vuoroparia_ei_nayteta(self):
+        # currentInning 3 on edellisen jakson jäänne
+        self.assertEqual(self.ottelu.vuoropari_txt, "")
+
+    def test_ei_sisavuoroa_eika_paloja(self):
+        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, "-")
+        self.assertEqual(self.ottelu.palot, "")
+
+    def test_jakson_alkaminen_palauttaa_vuoroparin(self):
+        # Kun uuden jakson ensimmäinen tulos kirjataan, tauko päättyy
+        tulos = {
+            "periods": {"home": 1, "away": 0},
+            "runs": [
+                {"home": [2, 0, 0, 1], "away": [0, 1, 0, 0]},
+                {"home": [None, None, None, None], "away": [1, None, None, None]},
+                {"home": [None], "away": [None]},
+                {"home": [None], "away": [None]},
+            ],
+            "outCount": 0,
+            "currentPeriod": 0,
+            "currentInning": 0,
+            "batTurn": 0,
+            "batTurnTeamKey": "home",
+            "finished": False,
+            "isPeriodMatch": True,
+        }
+        ottelu = rakenna_ottelu(130446, OTTELU_129209, tulos)
+        self.assertEqual(ottelu.jakso_txt, "2. jakso")
+        self.assertEqual(ottelu.vuoropari_txt, "1. aloittava")
+        self.assertEqual(ottelu.nykyinen_lyontivuoro, ottelu.kotijoukkue)
+
+
 class TestLyovanJoukkueenPaattely(unittest.TestCase):
     def test_bat_turn_team_key_ensisijainen(self):
         tulos = dict(TULOS_129209)
         self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "away")
 
     def test_paattely_first_bat_turns_listasta_aloittava(self):
-        # Jakso 2 (indeksi 1): aloittava on 16810 = koti, batTurn 0 = aloittava
+        # Jakso 2 = first_bat_turns[1] = 16810 = koti. currentPeriod 0, koska
+        # jakso 1 on päättynyt. batTurn 0 = aloittava.
         tulos = dict(TULOS_129209)
         del tulos["batTurnTeamKey"]
-        tulos["currentPeriod"] = 1
+        tulos["currentPeriod"] = 0
         tulos["batTurn"] = 0
         self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "home")
 
@@ -189,19 +263,36 @@ class TestLyovanJoukkueenPaattely(unittest.TestCase):
         # Sama jakso, batTurn 1 = lopettava -> vieras
         tulos = dict(TULOS_129209)
         del tulos["batTurnTeamKey"]
-        tulos["currentPeriod"] = 1
+        tulos["currentPeriod"] = 0
         tulos["batTurn"] = 1
         self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "away")
 
     def test_paattely_jakso_1(self):
-        # Jakso 1 (indeksi 0): aloittava on 16811 = vieras
+        # Jakso 1 = first_bat_turns[0] = 16811 = vieras. currentPeriod -1,
+        # koska yhtään jaksoa ei ole vielä päättynyt.
         tulos = dict(TULOS_129209)
         del tulos["batTurnTeamKey"]
-        tulos["currentPeriod"] = 0
+        tulos["currentPeriod"] = -1
         tulos["batTurn"] = 0
         self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "away")
 
+    def test_lyontijarjestys_vaihtuu_jaksoittain(self):
+        # Pelisäännöt 30 §: sama batTurn eri jaksossa -> eri joukkue.
+        # Tämä kiinnittää sen, ettei jakson indeksi pääse luistamaan.
+        tulos = dict(TULOS_129209)
+        del tulos["batTurnTeamKey"]
+        tulos["batTurn"] = 0
+        tulos["currentPeriod"] = -1
+        jakso_1 = paattele_lyova_joukkue(tulos, OTTELU_129209)
+        tulos["currentPeriod"] = 0
+        jakso_2 = paattele_lyova_joukkue(tulos, OTTELU_129209)
+        self.assertEqual(jakso_1, "away")
+        self.assertEqual(jakso_2, "home")
+        self.assertNotEqual(jakso_1, jakso_2)
+
     def test_ei_paattelya_ilman_tietoja(self):
+        # currentPeriod 2 -> jakso 4 (kotiutuskisa), jonka aloittajaa ei ole
+        # vielä päätetty -> first_bat_turns[3] on None.
         tulos = {"currentPeriod": 2, "batTurn": 0}
         self.assertIsNone(paattele_lyova_joukkue(tulos, OTTELU_129209))
 
@@ -213,7 +304,7 @@ class TestJunioriottelu(unittest.TestCase):
             "periods": {"home": 0, "away": 0},
             "runs": [{"home": [2, 1, 0, 3], "away": [1, 0, 2, None]}],
             "outCount": 1,
-            "currentPeriod": 0,
+            "currentPeriod": -1,
             "currentInning": 3,
             "batTurn": 1,
             "batTurnTeamKey": "away",

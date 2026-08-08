@@ -74,8 +74,31 @@ Kaksi päätepistettä, molemmat `?id=<numero>&apikey=<avain>`:
 (elävä tilanne). Esimerkkivastaukset ovat `tests/test_live.py`:n vakioina —
 käytä niitä totuutena, älä arvaa kenttien muotoa.
 
-- **`currentPeriod` ja `currentInning` ovat 0-pohjaisia**, tulostaulun
-  `jakso_nro` ja `vuoropari_nro` 1-pohjaisia.
+- **`currentPeriod` ja `currentInning` lasketaan eri tavalla, vaikka ne ovat
+  samassa vastauksessa.** Tämä on API:n pahin ansa, ja se maksoi yhden
+  kokonaisen bugikierroksen.
+  - `currentInning` on menossa olevan vuoroparin 0-pohjainen indeksi →
+    `vuoropari_nro = currentInning + 1`.
+  - `currentPeriod` on **viimeksi päättyneen** jakson 0-pohjainen indeksi:
+    1. jaksossa `-1`, 2. jaksossa `0`, päättyneessä ottelussa `1` →
+    `jakso_nro = currentPeriod + 2`.
+  - Todennettu 8.8.2026 otteluilla 130345, 131618, 130446, 130487 ja
+    vertaamalla `/online/<id>/events` -päätepisteeseen, jonka `period` on
+    aito 0-pohjainen menossa oleva jakso ja `inning` identtinen
+    `currentInning`in kanssa. Älä yhtenäistä näitä ilman uutta todennusta.
+- **Jaksotauolla `currentInning` ei nollaudu.** Kun jakso ratkeaa, se jää
+  edellisen jakson viimeiseen vuoropariin siihen asti, kunnes uuden jakson
+  ensimmäinen tulos kirjataan (nähty ottelussa 130446: `inning` 3 → 0).
+  Tauko tunnistetaan siitä, että jakso on päättynyt (`currentPeriod >= 0`)
+  mutta alkavan jakson `runs`-taulukko on kokonaan `null`. Silloin näytetään
+  alkava jakso ilman vuoroparia, eikä sisävuoroa tai paloja näytetä.
+- **`meta.first_bat_turns` indeksoidaan `currentPeriod + 1`:llä.** Lyönti-
+  järjestys vaihtuu jaksoittain (pelisäännöt 30 §), joten väärä indeksi ei
+  anna sinne päin vaan systemaattisesti väärän joukkueen. Negatiivinen
+  indeksi lukisi Pythonissa listaa lopusta.
+- **Supervuoron aloittajaa ei voi päätellä vuorottelusta.** Sen valitsee
+  hutunkeiton voittanut kapteeni vasta 2. jakson jälkeen (30 §), joten
+  `first_bat_turns[2]` ja `[3]` ovat `null` siihen asti.
 - **`batTurn`: 0 = aloittava, 1 = lopettava.** `batTurnTeamKey` (`"home"`/
   `"away"`) kertoo lyövän joukkueen suoraan. Varapolku on `meta.first_bat_turns`,
   jossa on jaksoittain lyönnin aloittavan joukkueen id — vertaa `home.id` /
@@ -132,15 +155,22 @@ manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
 
 ## Tiedossa olevat avoimet kohdat
 
-- **Lyömässä olevan joukkueen päättelyä ei ole vahvistettu oikealla käynnissä
-  olevalla ottelulla** — vain esimerkkidatalla ja käsin rakennetulla
-  testitilanteella. Tämä on tärkein asia todentaa seuraavan ottelun aikana.
-  Tilanne 7.8.2026: päättynyt ja alkamaton ottelu on todennettu oikealla
-  datalla ja toimivat. Käynnissä oleva ottelu eli `match-live-result`:n
-  elävä tilanne on yhä näkemättä; katso silloin erityisesti sisävuoron
-  korostus, jakso- ja vuoroparinumerointi sekä palojen kertyminen.
+- ~~Lyömässä olevan joukkueen päättelyä ei ole vahvistettu~~ **Todennettu
+  8.8.2026** viidellä oikealla ottelulla: alkamaton, käynnissä oleva jaksossa
+  1 ja 2, jaksotauko, jakson vaihtuminen ja päättynyt. Sisävuoron korostus,
+  jakso- ja vuoroparinumerointi sekä palojen kertyminen toimivat.
 - Supervuoron ja kotiutuskisan käyttäytyminen API:ssa on päätelty
-  `runs`-taulukon rakenteesta, ei nähty oikeassa ottelussa.
+  `runs`-taulukon rakenteesta, ei nähty oikeassa ottelussa. `runs`-pituudet
+  ovat `[4, 4, 1, 1]`, mikä vastaa sääntöjen supervuoro**paria** ja yhtä
+  kotiutuskisaa. Tämä on suurin jäljellä oleva todentamaton kohta.
+- **`details.inning_count` ja `meta.super_inning_in_use` ovat käyttämättä.**
+  Säännöt sallivat juniori- ja turnausotteluissa 3 tai 2 vuoroparin jaksot,
+  ja Superpesiksen runkosarjassa supervuoroa ei pelata lainkaan. Koodi
+  olettaa yhä neljä vuoroparia ja S-sarakkeen aina.
+- **`/online/<id>/events` on dokumentoimaton mutta hyödyllinen.** Se antaa
+  ottelun tapahtumat ja ylätasolla luotettavan nykytilan (`period`, `inning`,
+  `bat_turn`, `team`). Hyvä ristiintarkistukseen, mutta älä ota tuotannon
+  datalähteeksi: dokumentoimaton, eri polun takana, ja `finished` laahaa.
 - `/uusi` ja `/paivita` ovat ilman mitään tunnistautumista.
 - `app/db.py`:n istunnonhallinta on omalaatuista (`update_match` sulkee
   yhteyden `finally`-lohkossa, `get_match_by_ottelunumero` luo uuden istunnon

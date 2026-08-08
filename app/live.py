@@ -13,8 +13,16 @@ API:n kentät pähkinänkuoressa (ks. esimerkit dokumentaatiosta):
         runs              lista jaksoja, kussakin {"home": [...], "away": [...]}
                           jokainen alkio on yhden vuoroparin juoksut tai null
         outCount          palot
-        currentPeriod     menossa oleva jakso, 0-pohjainen
-        currentInning     menossa oleva vuoropari jakson sisällä, 0-pohjainen
+        currentPeriod     viimeksi PÄÄTTYNEEN jakson 0-pohjainen indeksi, ei
+                          menossa olevaa: 1. jaksossa -1, 2. jaksossa 0,
+                          päättyneessä kaksijaksoisessa ottelussa 1. Menossa
+                          oleva jakso on siis currentPeriod + 1 (0-pohjaisena).
+        currentInning     menossa oleva vuoropari jakson sisällä, 0-pohjainen.
+                          Huom: eri logiikka kuin currentPeriodilla, vaikka
+                          kentät ovat samassa vastauksessa. Todennettu
+                          8.8.2026 vertaamalla /online/<id>/events -paate-
+                          pisteeseen: sen period on 0-pohjainen menossa oleva
+                          jakso ja inning identtinen currentInningin kanssa.
         batTurn           0 = aloittava, 1 = lopettava
         batTurnTeamKey    "home" tai "away" = lyömässä oleva joukkue
         finished          onko ottelu päättynyt
@@ -86,6 +94,17 @@ def joukkueen_nimi(joukkue, oletus):
     return nimi or oletus
 
 
+def _jakso_alkanut(juoksut, jakso_idx):
+    """Onko jaksossa kirjattu yhtään vuoroparin tulosta kummallekaan."""
+    if jakso_idx < 0 or jakso_idx >= len(juoksut):
+        return False
+    jakso = juoksut[jakso_idx] or {}
+    for puoli in ("home", "away"):
+        if any(x is not None for x in (jakso.get(puoli) or [])):
+            return True
+    return False
+
+
 def _summaa(vuoroparit):
     """Vuoroparien juoksut yhteen. Palauttaa None, jos yhtään ei ole kirjattu."""
     if not vuoroparit:
@@ -118,6 +137,11 @@ def paattele_lyova_joukkue(tulos, ottelu_data):
     puuttuu, päättely tehdään ottelun meta.first_bat_turns -listasta: se kertoo
     jaksoittain sen joukkueen id:n, joka aloittaa lyömisen. batTurn 0 tarkoittaa
     aloittavaa ja 1 lopettavaa vuoroparin puoliskoa.
+
+    Lyöntijärjestys vaihtuu jaksoittain (pelisäännöt 30 §: toisen jakson
+    aloittaa sisävuorolla se joukkue, joka aloitti 1. jakson ulkovuorolla).
+    Siksi oikea jakso on luettava listasta täsmälleen oikeasta kohdasta:
+    väärä indeksi ei anna sinne päin vaan systemaattisesti väärän joukkueen.
     """
     if not tulos:
         return None
@@ -127,12 +151,17 @@ def paattele_lyova_joukkue(tulos, ottelu_data):
         return avain
 
     bat_turn = tulos.get("batTurn")
-    jakso_indeksi = tulos.get("currentPeriod")
-    if bat_turn is None or jakso_indeksi is None or not ottelu_data:
+    paattynyt_jakso_idx = tulos.get("currentPeriod")
+    if bat_turn is None or paattynyt_jakso_idx is None or not ottelu_data:
         return None
 
+    # currentPeriod on viimeksi päättyneen jakson indeksi, joten menossa oleva
+    # jakso on yhtä suurempi. Ilman tätä 1. jakson arvo -1 indeksoisi listaa
+    # lopusta ja 2. jaksossa luettaisiin 1. jakson aloittaja.
+    jakso_indeksi = paattynyt_jakso_idx + 1
+
     first_bat_turns = (ottelu_data.get("meta") or {}).get("first_bat_turns") or []
-    if jakso_indeksi >= len(first_bat_turns):
+    if jakso_indeksi < 0 or jakso_indeksi >= len(first_bat_turns):
         return None
 
     aloittavan_id = first_bat_turns[jakso_indeksi]
@@ -176,8 +205,34 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
 
     on_jaksopeli = bool(tulos.get("isPeriodMatch"))
     paattynyt = bool(tulos.get("finished"))
-    nykyinen_jakso_idx = tulos.get("currentPeriod") or 0
+    # currentPeriod kertoo viimeksi päättyneen jakson, currentInning menossa
+    # olevan vuoroparin. Eri logiikka samassa vastauksessa; älä yhtenäistä
+    # ilman että todennat sen oikealla käynnissä olevalla ottelulla.
+    paattynyt_jakso_idx = tulos.get("currentPeriod")
+    if paattynyt_jakso_idx is None:
+        paattynyt_jakso_idx = -1
+
+    # Käynnissä olevassa ottelussa menossa on viimeksi päättynyttä seuraava
+    # jakso. Päättyneessä ottelussa seuraavaa ei ole: viimeksi päättynyt on
+    # myös viimeinen pelattu, eikä pelaamatta jäänyttä supervuoroa saa
+    # merkitä alkaneeksi.
+    if paattynyt:
+        nykyinen_jakso_idx = paattynyt_jakso_idx
+    else:
+        nykyinen_jakso_idx = paattynyt_jakso_idx + 1
+
     nykyinen_vuoropari_idx = tulos.get("currentInning") or 0
+
+    # Jaksotauko: edellinen jakso on ratkennut, seuraava ei ole vielä alkanut.
+    # currentInning ei nollaudu tauon ajaksi vaan jää edellisen jakson
+    # viimeiseen vuoropariin, joten vuoroparia ei voi näyttää. Nollautuu vasta
+    # kun uuden jakson ensimmäinen juoksu kirjataan (todennettu ottelussa
+    # 130446: inning 3 -> 0 jakson 2 alkaessa).
+    jaksotauko = (
+        not paattynyt
+        and paattynyt_jakso_idx >= 0
+        and not _jakso_alkanut(tulos.get("runs") or [], nykyinen_jakso_idx)
+    )
 
     # --- Jaksovoitot ---------------------------------------------------
     if on_jaksopeli:
@@ -207,20 +262,26 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
         ottelu.aseta_jakson_juoksut(i, koti, vieras)
 
     # --- Palot ----------------------------------------------------------
-    ottelu.palot = parsi_x_palot(tulos.get("outCount") or 0)
+    # outCount jää viimeiseen tilaansa, kun vuoro ei ole käynnissä. Päättyneessä
+    # ottelussa ja jaksotauolla paloja ei siis näytetä.
+    vuoro_kaynnissa = not paattynyt and not jaksotauko
+    ottelu.palot = parsi_x_palot(tulos.get("outCount") or 0) if vuoro_kaynnissa else ""
 
     # --- Lyömässä oleva joukkue -----------------------------------------
-    lyova = paattele_lyova_joukkue(tulos, ottelu_data)
+    # Sama koskee sisävuoroa: päättyneessä ottelussa ja jaksotauolla kukaan ei
+    # ole lyömässä, joten korostusta ei näytetä.
+    lyova = paattele_lyova_joukkue(tulos, ottelu_data) if vuoro_kaynnissa else None
     if lyova == "home":
         ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue
     elif lyova == "away":
         ottelu.nykyinen_lyontivuoro = ottelu.vierasjoukkue
     else:
         ottelu.nykyinen_lyontivuoro = "-"
-        debug_message(
-            f"Lyömässä olevaa joukkuetta ei voitu päätellä (ottelu {ottelunumero})",
-            constants.DEBUG_MESSAGE_LEVEL_WARN,
-        )
+        if vuoro_kaynnissa:
+            debug_message(
+                f"Lyömässä olevaa joukkuetta ei voitu päätellä (ottelu {ottelunumero})",
+                constants.DEBUG_MESSAGE_LEVEL_WARN,
+            )
 
     # --- Jakso ja vuoropari ----------------------------------------------
     ottelu.jakso_nro = nykyinen_jakso_idx + 1
@@ -229,6 +290,10 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
     if paattynyt:
         # Koko taulu näytetään, mutta tilateksti kertoo ottelun päättyneen
         ottelu.jakso_txt = "Ottelu on päättynyt"
+        ottelu.vuoropari_txt = ""
+    elif jaksotauko:
+        # Alkava jakso näytetään, mutta vuoroparia ei ole vielä olemassa
+        ottelu.jakso_txt = jakso_into_to_str(ottelu.jakso_nro)
         ottelu.vuoropari_txt = ""
     else:
         ottelu.jakso_txt = jakso_into_to_str(ottelu.jakso_nro)
