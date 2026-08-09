@@ -16,9 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.live import (  # noqa: E402
     joukkueen_nimi,
     paattele_lyova_joukkue,
+    paattele_tila,
     rakenna_ottelu,
-    vuoroparin_teksti,
 )
+from app.tulostaulu import KOTI, VIERAS, vuoroparin_nimi  # noqa: E402
 
 
 # --- Testidata ---------------------------------------------------------------
@@ -154,6 +155,11 @@ def kaynnissa_oleva_tulos():
     }
 
 
+def juoksut(taulu):
+    """Jaksosarakkeet muodossa [(koti, vieras), ...] vertailun helpottamiseksi."""
+    return [(jakso.koti, jakso.vieras) for jakso in taulu.jaksot]
+
+
 class TestJoukkueenNimi(unittest.TestCase):
     def test_lyhyt_nimi_kaytetaan_kokonaisena(self):
         # "Lapuan Virkiä" on 13 merkkiä
@@ -173,6 +179,37 @@ class TestJoukkueenNimi(unittest.TestCase):
         self.assertEqual(joukkueen_nimi(None, "Koti"), "Koti")
 
 
+class TestOttelunTila(unittest.TestCase):
+    """Jakson ja vuoroparin päättely erikseen muusta rakentamisesta."""
+
+    def test_ensimmainen_jakso(self):
+        # currentPeriod -1 tarkoittaa, ettei yhtään jaksoa ole päättynyt.
+        tila = paattele_tila(kaynnissa_oleva_tulos())
+        self.assertEqual(tila.jakso_idx, 0)
+        self.assertEqual(tila.vuoropari_idx, 1)
+        self.assertTrue(tila.vuoro_kaynnissa)
+
+    def test_miinus_yksi_ei_muutu_nollaksi(self):
+        # `or 0` -kuvio muuttaisi arvon -1 nollaksi ja jaksosta tulisi 2.
+        tulos = dict(kaynnissa_oleva_tulos(), currentPeriod=-1)
+        self.assertEqual(paattele_tila(tulos).jakso_idx, 0)
+
+    def test_paattynyt_ottelu_ei_siirry_seuraavaan_jaksoon(self):
+        tila = paattele_tila(TULOS_129209)
+        self.assertTrue(tila.paattynyt)
+        self.assertEqual(tila.jakso_idx, 1)
+        self.assertFalse(tila.vuoro_kaynnissa)
+
+    def test_puuttuvat_kentat(self):
+        tila = paattele_tila({})
+        self.assertEqual(tila.jakso_idx, 0)
+        self.assertEqual(tila.vuoropari_idx, 0)
+
+    def test_null_current_inning(self):
+        tulos = dict(kaynnissa_oleva_tulos(), currentInning=None)
+        self.assertEqual(paattele_tila(tulos).vuoropari_idx, 0)
+
+
 class TestPaattynytOttelu(unittest.TestCase):
     def setUp(self):
         self.ottelu = rakenna_ottelu(129209, OTTELU_129209, TULOS_129209)
@@ -182,49 +219,49 @@ class TestPaattynytOttelu(unittest.TestCase):
         self.assertEqual(self.ottelu.vieras_jaksovoitot, 0)
 
     def test_jaksojen_juoksut(self):
-        # Lopputulos API:n mukaan: 2-0 (8-3, 6-2)
-        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 8)
-        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 3)
-        self.assertEqual(self.ottelu.jakso_2_koti_juoksut, 6)
-        self.assertEqual(self.ottelu.jakso_2_vieras_juoksut, 2)
-
-    def test_pelaamattomat_jaksot_ovat_tyhjia(self):
-        self.assertIsNone(self.ottelu.jakso_3_koti_juoksut)
-        self.assertIsNone(self.ottelu.jakso_3_vieras_juoksut)
-        self.assertIsNone(self.ottelu.jakso_4_koti_juoksut)
-        self.assertIsNone(self.ottelu.jakso_4_vieras_juoksut)
+        # Lopputulos API:n mukaan: 2-0 (8-3, 6-2). Pelaamattomat jaksot tyhjiä.
+        self.assertEqual(juoksut(self.ottelu), [(8, 3), (6, 2), (None, None), (None, None)])
 
     def test_tilateksti(self):
-        self.assertEqual(self.ottelu.jakso_txt, "Ottelu on päättynyt")
-        self.assertEqual(self.ottelu.vuoropari_txt, "")
+        self.assertEqual(self.ottelu.tilanne_txt, "Ottelu on päättynyt")
+        self.assertEqual(self.ottelu.info_txt, "")
 
     def test_ei_sisavuoroa_eika_paloja(self):
         # batTurn ja outCount jäävät API:ssa viimeiseen tilaansa, mutta
         # päättyneessä ottelussa ei ole sisävuoroa -> ei korostusta, ei paloja.
-        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, "-")
-        self.assertEqual(self.ottelu.palot, "")
+        self.assertIsNone(self.ottelu.sisavuoro)
+        self.assertEqual(self.ottelu.palot, 0)
 
     def test_joukkueiden_nimet(self):
         self.assertEqual(self.ottelu.kotijoukkue, "Jussittaret, Seinäjoki")
         self.assertEqual(self.ottelu.vierasjoukkue, "Lapuan Virkiä")
+
+    def test_lahde(self):
+        self.assertEqual(self.ottelu.lahde, "api")
 
 
 class TestAlkamatonOttelu(unittest.TestCase):
     def setUp(self):
         self.ottelu = rakenna_ottelu(129199, OTTELU_129199, None)
 
-    def test_otteluinfo(self):
-        self.assertEqual(self.ottelu.otteluinfo, "Ottelu ei ole alkanut")
+    def test_tilateksti(self):
+        self.assertEqual(self.ottelu.tilanne_txt, "Ottelu ei ole alkanut")
 
     def test_nimet_haetaan_silti(self):
         self.assertEqual(self.ottelu.kotijoukkue, "Fera, Rauma")
         self.assertEqual(self.ottelu.vierasjoukkue, "Jyväskylän Kirittäret")
 
     def test_tulokset_tyhjia(self):
-        self.assertIsNone(self.ottelu.jakso_1_koti_juoksut)
+        self.assertEqual(juoksut(self.ottelu), [(None, None)] * 4)
         self.assertIsNone(self.ottelu.koti_jaksovoitot)
-        self.assertEqual(self.ottelu.palot, "")
-        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, "-")
+        self.assertEqual(self.ottelu.palot, 0)
+        self.assertIsNone(self.ottelu.sisavuoro)
+
+    def test_taulussa_on_silti_jaksosarakkeet(self):
+        # Alkamaton ottelu ei saa kaventaa taulua: sarakkeet ovat olemassa
+        # tyhjinä, kuten ennenkin.
+        self.assertEqual(len(self.ottelu.jaksot), 4)
+        self.assertEqual(self.ottelu.sarakkeita, 7)
 
 
 class TestKaynnissaOlevaOttelu(unittest.TestCase):
@@ -232,21 +269,23 @@ class TestKaynnissaOlevaOttelu(unittest.TestCase):
         self.ottelu = rakenna_ottelu(129209, OTTELU_129209, kaynnissa_oleva_tulos())
 
     def test_lyova_joukkue(self):
-        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, self.ottelu.kotijoukkue)
+        self.assertEqual(self.ottelu.sisavuoro, KOTI)
 
-    def test_jakso_ja_vuoropari(self):
-        self.assertEqual(self.ottelu.jakso_nro, 1)
-        self.assertEqual(self.ottelu.jakso_txt, "1. jakso")
-        self.assertEqual(self.ottelu.vuoropari_txt, "2. lopettava")
+    def test_tilateksti(self):
+        self.assertEqual(self.ottelu.tilanne_txt, "1. jakso / 2. lopettava")
+
+    def test_aktiivinen_jakso(self):
+        self.assertEqual(
+            [j.aktiivinen for j in self.ottelu.jaksot], [True, False, False, False]
+        )
 
     def test_palot(self):
-        self.assertEqual(self.ottelu.palot, "XX")
+        self.assertEqual(self.ottelu.palot, 2)
 
     def test_alkanut_jakso_nollana_alkamaton_tyhjana(self):
-        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 1)
-        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 2)
-        self.assertIsNone(self.ottelu.jakso_2_koti_juoksut)
-        self.assertIsNone(self.ottelu.jakso_3_koti_juoksut)
+        self.assertEqual(
+            juoksut(self.ottelu), [(1, 2), (None, None), (None, None), (None, None)]
+        )
 
 
 class TestSupervuoroOttelu(unittest.TestCase):
@@ -256,28 +295,18 @@ class TestSupervuoroOttelu(unittest.TestCase):
         self.ottelu = rakenna_ottelu(146541, OTTELU_146541, TULOS_146541)
 
     def test_jaksojen_juoksut(self):
-        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 6)
-        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 4)
-        self.assertEqual(self.ottelu.jakso_2_koti_juoksut, 2)
-        self.assertEqual(self.ottelu.jakso_2_vieras_juoksut, 4)
-
-    def test_supervuoron_juoksut(self):
-        self.assertEqual(self.ottelu.jakso_3_koti_juoksut, 1)
-        self.assertEqual(self.ottelu.jakso_3_vieras_juoksut, 0)
-
-    def test_pelaamaton_kotiutuskisa_on_tyhja(self):
-        # Tämä kaatuisi, jos päättyneessä ottelussa jaksoindeksiin lisättäisiin
-        # yksi: kotiutuskisa merkittäisiin alkaneeksi ja näyttäisi nollaa.
-        self.assertIsNone(self.ottelu.jakso_4_koti_juoksut)
-        self.assertIsNone(self.ottelu.jakso_4_vieras_juoksut)
+        # Pelaamaton kotiutuskisa jää tyhjäksi. Tämä kaatuisi, jos päättyneessä
+        # ottelussa jaksoindeksiin lisättäisiin yksi: kotiutuskisa merkittäisiin
+        # alkaneeksi ja näyttäisi nollaa.
+        self.assertEqual(juoksut(self.ottelu), [(6, 4), (2, 4), (1, 0), (None, None)])
 
     def test_jaksovoitot_sisaltavat_supervuoron(self):
         self.assertEqual(self.ottelu.koti_jaksovoitot, 2)
         self.assertEqual(self.ottelu.vieras_jaksovoitot, 1)
 
     def test_tilateksti(self):
-        self.assertEqual(self.ottelu.jakso_txt, "Ottelu on päättynyt")
-        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, "-")
+        self.assertEqual(self.ottelu.tilanne_txt, "Ottelu on päättynyt")
+        self.assertIsNone(self.ottelu.sisavuoro)
 
 
 class TestKotiutuskisaOttelu(unittest.TestCase):
@@ -287,18 +316,11 @@ class TestKotiutuskisaOttelu(unittest.TestCase):
         self.ottelu = rakenna_ottelu(127482, OTTELU_127482, TULOS_127482)
 
     def test_kaikki_sarakkeet(self):
-        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 4)
-        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 0)
-        self.assertEqual(self.ottelu.jakso_2_koti_juoksut, 3)
-        self.assertEqual(self.ottelu.jakso_2_vieras_juoksut, 4)
-        self.assertEqual(self.ottelu.jakso_3_koti_juoksut, 0)
-        self.assertEqual(self.ottelu.jakso_3_vieras_juoksut, 0)
-        self.assertEqual(self.ottelu.jakso_4_koti_juoksut, 1)
-        self.assertEqual(self.ottelu.jakso_4_vieras_juoksut, 2)
+        self.assertEqual(juoksut(self.ottelu), [(4, 0), (3, 4), (0, 0), (1, 2)])
 
     def test_tasan_mennyt_supervuoro_naytetaan_nollana(self):
         # 0-0 ei ole sama kuin pelaamaton: sarake ei saa jäädä tyhjäksi
-        self.assertIsNotNone(self.ottelu.jakso_3_koti_juoksut)
+        self.assertIsNotNone(self.ottelu.jaksot[2].koti)
 
     def test_jaksovoitot_sisaltavat_kotiutuskisan(self):
         self.assertEqual(self.ottelu.koti_jaksovoitot, 1)
@@ -343,18 +365,17 @@ class TestKaynnissaOlevaSupervuoro(unittest.TestCase):
         # Supervuoro ei ole alkanut -> jaksotauko: ei vuoroparia, ei paloja
         tulos = self._tulos({"home": [None], "away": [None]})
         ottelu = rakenna_ottelu(146541, OTTELU_146541, tulos)
-        self.assertEqual(ottelu.jakso_txt, "Supervuoro")
-        self.assertEqual(ottelu.vuoropari_txt, "")
-        self.assertEqual(ottelu.palot, "")
+        self.assertEqual(ottelu.tilanne_txt, "Supervuoro")
+        self.assertEqual(ottelu.palot, 0)
+        self.assertIsNone(ottelu.sisavuoro)
 
     def test_supervuoro_kaynnissa(self):
         # Supervuorossa on vain yksi vuoropari, joten numeroa ei näytetä
         tulos = self._tulos({"home": [0], "away": [None]}, bat_turn=1)
         ottelu = rakenna_ottelu(146541, OTTELU_146541, tulos)
-        self.assertEqual(ottelu.jakso_txt, "Supervuoro")
-        self.assertEqual(ottelu.vuoropari_txt, "lopettava")
-        self.assertEqual(ottelu.nykyinen_lyontivuoro, ottelu.vierasjoukkue)
-        self.assertEqual(ottelu.palot, "X")
+        self.assertEqual(ottelu.tilanne_txt, "Supervuoro / lopettava")
+        self.assertEqual(ottelu.sisavuoro, VIERAS)
+        self.assertEqual(ottelu.palot, 1)
 
     def test_kotiutuskisa_kaynnissa(self):
         # currentPeriod 2 = supervuoro päättyi -> menossa kotiutuskisa
@@ -362,7 +383,7 @@ class TestKaynnissaOlevaSupervuoro(unittest.TestCase):
         tulos["currentPeriod"] = 2
         tulos["runs"][3] = {"home": [1], "away": [None]}
         ottelu = rakenna_ottelu(127482, OTTELU_127482, tulos)
-        self.assertEqual(ottelu.jakso_txt, "Kotiutuskisa")
+        self.assertEqual(ottelu.tilanne_txt, "Kotiutuskisa / aloittava")
 
 
 class TestJaksotauko(unittest.TestCase):
@@ -392,16 +413,13 @@ class TestJaksotauko(unittest.TestCase):
         }
         self.ottelu = rakenna_ottelu(130446, OTTELU_129209, tulos)
 
-    def test_alkava_jakso_naytetaan(self):
-        self.assertEqual(self.ottelu.jakso_txt, "2. jakso")
-
-    def test_vuoroparia_ei_nayteta(self):
-        # currentInning 3 on edellisen jakson jäänne
-        self.assertEqual(self.ottelu.vuoropari_txt, "")
+    def test_alkava_jakso_naytetaan_ilman_vuoroparia(self):
+        # currentInning 3 on edellisen jakson jäänne, joten sitä ei näytetä
+        self.assertEqual(self.ottelu.tilanne_txt, "2. jakso")
 
     def test_ei_sisavuoroa_eika_paloja(self):
-        self.assertEqual(self.ottelu.nykyinen_lyontivuoro, "-")
-        self.assertEqual(self.ottelu.palot, "")
+        self.assertIsNone(self.ottelu.sisavuoro)
+        self.assertEqual(self.ottelu.palot, 0)
 
     def test_jakson_alkaminen_palauttaa_vuoroparin(self):
         # Kun uuden jakson ensimmäinen tulos kirjataan, tauko päättyy
@@ -422,15 +440,14 @@ class TestJaksotauko(unittest.TestCase):
             "isPeriodMatch": True,
         }
         ottelu = rakenna_ottelu(130446, OTTELU_129209, tulos)
-        self.assertEqual(ottelu.jakso_txt, "2. jakso")
-        self.assertEqual(ottelu.vuoropari_txt, "1. aloittava")
-        self.assertEqual(ottelu.nykyinen_lyontivuoro, ottelu.kotijoukkue)
+        self.assertEqual(ottelu.tilanne_txt, "2. jakso / 1. aloittava")
+        self.assertEqual(ottelu.sisavuoro, KOTI)
 
 
 class TestLyovanJoukkueenPaattely(unittest.TestCase):
     def test_bat_turn_team_key_ensisijainen(self):
         tulos = dict(TULOS_129209)
-        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "away")
+        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), VIERAS)
 
     def test_paattely_first_bat_turns_listasta_aloittava(self):
         # Jakso 2 = first_bat_turns[1] = 16810 = koti. currentPeriod 0, koska
@@ -439,7 +456,7 @@ class TestLyovanJoukkueenPaattely(unittest.TestCase):
         del tulos["batTurnTeamKey"]
         tulos["currentPeriod"] = 0
         tulos["batTurn"] = 0
-        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "home")
+        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), KOTI)
 
     def test_paattely_first_bat_turns_listasta_lopettava(self):
         # Sama jakso, batTurn 1 = lopettava -> vieras
@@ -447,7 +464,7 @@ class TestLyovanJoukkueenPaattely(unittest.TestCase):
         del tulos["batTurnTeamKey"]
         tulos["currentPeriod"] = 0
         tulos["batTurn"] = 1
-        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "away")
+        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), VIERAS)
 
     def test_paattely_jakso_1(self):
         # Jakso 1 = first_bat_turns[0] = 16811 = vieras. currentPeriod -1,
@@ -456,7 +473,7 @@ class TestLyovanJoukkueenPaattely(unittest.TestCase):
         del tulos["batTurnTeamKey"]
         tulos["currentPeriod"] = -1
         tulos["batTurn"] = 0
-        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), "away")
+        self.assertEqual(paattele_lyova_joukkue(tulos, OTTELU_129209), VIERAS)
 
     def test_lyontijarjestys_vaihtuu_jaksoittain(self):
         # Pelisäännöt 30 §: sama batTurn eri jaksossa -> eri joukkue.
@@ -468,8 +485,8 @@ class TestLyovanJoukkueenPaattely(unittest.TestCase):
         jakso_1 = paattele_lyova_joukkue(tulos, OTTELU_129209)
         tulos["currentPeriod"] = 0
         jakso_2 = paattele_lyova_joukkue(tulos, OTTELU_129209)
-        self.assertEqual(jakso_1, "away")
-        self.assertEqual(jakso_2, "home")
+        self.assertEqual(jakso_1, VIERAS)
+        self.assertEqual(jakso_2, KOTI)
         self.assertNotEqual(jakso_1, jakso_2)
 
     def test_ei_paattelya_ilman_tietoja(self):
@@ -481,7 +498,6 @@ class TestLyovanJoukkueenPaattely(unittest.TestCase):
 
 class TestJunioriottelu(unittest.TestCase):
     def setUp(self):
-        ottelu_data = dict(OTTELU_129209)
         tulos = {
             "periods": {"home": 0, "away": 0},
             "runs": [{"home": [2, 1, 0, 3], "away": [1, 0, 2, None]}],
@@ -493,21 +509,26 @@ class TestJunioriottelu(unittest.TestCase):
             "finished": False,
             "isPeriodMatch": False,
         }
-        self.ottelu = rakenna_ottelu(99999, ottelu_data, tulos)
+        self.ottelu = rakenna_ottelu(99999, dict(OTTELU_129209), tulos)
 
-    def test_otteluinfo(self):
-        self.assertEqual(self.ottelu.otteluinfo, "Junioriottelu")
+    def test_info_txt(self):
+        self.assertEqual(self.ottelu.info_txt, "Junioriottelu")
 
     def test_ei_jaksovoittoja(self):
         self.assertIsNone(self.ottelu.koti_jaksovoitot)
         self.assertIsNone(self.ottelu.vieras_jaksovoitot)
 
     def test_vain_yksi_jaksosarake(self):
-        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 6)
-        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 3)
-        self.assertIsNone(self.ottelu.jakso_2_koti_juoksut)
-        self.assertIsNone(self.ottelu.jakso_3_koti_juoksut)
-        self.assertIsNone(self.ottelu.jakso_4_koti_juoksut)
+        # Junioriottelussa ei ole jaksoja, supervuoroa eikä kotiutuskisaa,
+        # joten taulussa on vain yksi tulossarake.
+        self.assertEqual(juoksut(self.ottelu), [(6, 3)])
+        self.assertEqual([j.otsikko for j in self.ottelu.jaksot], ["1"])
+        self.assertEqual(self.ottelu.sarakkeita, 4)
+
+    def test_tilarivilla_ei_jaksoa(self):
+        # "1. jakso / 4. lopettava" olisi harhaanjohtava ottelussa, jossa ei
+        # ole jaksoja lainkaan.
+        self.assertEqual(self.ottelu.tilanne_txt, "4. lopettava")
 
 
 class TestPeruttuOttelu(unittest.TestCase):
@@ -515,18 +536,23 @@ class TestPeruttuOttelu(unittest.TestCase):
         ottelu_data = dict(OTTELU_129199)
         ottelu_data["canceled"] = True
         ottelu = rakenna_ottelu(129199, ottelu_data, None)
-        self.assertEqual(ottelu.otteluinfo, "Ottelu peruttu")
+        self.assertEqual(ottelu.tilanne_txt, "Ottelu peruttu")
+        self.assertEqual(len(ottelu.jaksot), 4)
 
 
-class TestVuoroparinTeksti(unittest.TestCase):
+class TestVuoroparinNimi(unittest.TestCase):
+    """Jaettu molempien taulujen kesken (app/tulostaulu.py)."""
+
     def test_perusjakso(self):
-        self.assertEqual(vuoroparin_teksti(1, 0, 0), "1. aloittava")
-        self.assertEqual(vuoroparin_teksti(2, 3, 1), "4. lopettava")
+        self.assertEqual(vuoroparin_nimi(1, 0, False), "1. aloittava")
+        self.assertEqual(vuoroparin_nimi(2, 3, True), "4. lopettava")
 
-    def test_supervuoro(self):
-        self.assertEqual(vuoroparin_teksti(3, 0, 0), "aloittava")
-        self.assertEqual(vuoroparin_teksti(4, 0, 1), "lopettava")
-        self.assertEqual(vuoroparin_teksti(4, 1, 0), "2. aloittava")
+    def test_supervuoro_ja_kotari_ilman_jarjestysnumeroa(self):
+        self.assertEqual(vuoroparin_nimi(3, 0, False), "aloittava")
+        self.assertEqual(vuoroparin_nimi(4, 0, True), "lopettava")
+
+    def test_jatkopari_numeroidaan(self):
+        self.assertEqual(vuoroparin_nimi(4, 1, False), "2. aloittava")
 
 
 if __name__ == "__main__":

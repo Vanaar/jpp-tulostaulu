@@ -34,38 +34,59 @@ python -m unittest discover -s tests -v
 python tools/esikatselu.py > esikatselu.html   # renderöi taulun eri tiloissa
 ```
 
+## Rakenne
+
+Taulut on erotettu toisistaan kahdeksi sovittimeksi, jotka rakentavat saman
+näkymämallin. Template näkee vain näkymämallin eikä tiedä kumpi taulu on
+kyseessä.
+
+```
+app/tulostaulu.py    Tulostaulu- ja Jakso-näkymämalli + jaetut tekstit
+   ^                          ^
+app/live.py                app/manuaali.py
+pesistulokset-API          Otteludata-kantarivi + manuaalireitit
+```
+
+**Uusi kenttä lisätään `app/tulostaulu.py`:hyn**, jolloin Python pakottaa
+täyttämään sen molemmissa sovittimissa. Ennen livetaulu jäljitteli kantariviä
+kenttä kentältä, ja templateen lisätty kenttä saattoi unohtua toisesta
+taulusta — toinen taulu hajosi hiljaa.
+
+Sovellus rakennetaan tehtaalla `app/__init__.py: luo_sovellus()`. Sekä
+käynnistystiedosto, testit että `tools/esikatselu.py` käyttävät sitä, joten
+reitit ovat aina samat. Manuaalitaulun blueprint rekisteröidään vain jos
+`MANUAALITAULU_KAYTOSSA` on tosi.
+
 ## Gotchat
 
 **`config.py` puuttuu repostä ja ilman sitä mikään ei importtaudu.** Se on
-`.gitignore`ssa (sisältää tietokannan salasanan ja API-avaimen). Jokainen
-moduuli tekee `from config import Config` importin yhteydessä. Kopioi
-`config.example.py` → `config.py`, jos ympäristö on tyhjä. Uudet asetukset
-luetaan `getattr(Config, 'NIMI', oletus)` -tyyliin, jotta vanha `config.py` ei
-kaada sovellusta.
+`.gitignore`ssa (sisältää tietokannan salasanan ja API-avaimen). Kopioi
+`config.example.py` → `config.py`, jos ympäristö on tyhjä. Asetukset luetaan
+`app/asetukset.py: asetus('NIMI', oletus)` -funktiolla **ajonaikaisesti**, ei
+importin yhteydessä: näin vanha `config.py` ei kaada sovellusta uuden
+asetuksen puuttuessa, ja testit voivat vaihtaa asetuksen lennossa. Älä lue
+`Config`ia suoraan moduulitasolla.
 
 **Käynnistystiedoston nimessä on väliviiva** (`jpp-tulostaulu.py`), joten sitä
-ei voi importata. Testit rakentavat Flask-sovelluksen itse funktiolla
-`luo_sovellus()` tiedostossa `tests/test_reitit.py`. Jos lisäät reitin tai
-muutat blueprintin rekisteröintiä, muutos pitää tehdä molempiin.
+ei voi importata. Se hakee sovelluksen tehtaalta, joten reittejä ei tarvitse
+ylläpitää kahdessa paikassa.
 
-**Yksi template palvelee kahta täysin eri datamallia.** `tulostaulu.html`
-saa joko SQLAlchemy-olion (`app/models.py: Otteludata`) tai `LiveOttelu`-olion
-(`app/live.py`). `LiveOttelu` on tarkoituksella duck-typattu vastaamaan
-kenttänimiltään kantamallia. **Jos lisäät templateen kentän, lisää se
-molempiin** — muuten toinen taulu hajoaa hiljaa.
+**Sisävuoro on `"koti"`, `"vieras"` tai `None`** (`Tulostaulu.sisavuoro`), ei
+joukkueen nimi. Manuaalitaulun kannassa se on yhä nimi, mutta vertailu tehdään
+yhdessä paikassa: `app/manuaali.py: _sisavuoro`. Älä palauta nimivertailua
+templateen — identtinen näyttönimi korostaisi molemmat rivit.
 
-**Sisävuoron korostus perustuu joukkueen nimen vertailuun**
-(`ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue`). Se on peräisin
-manuaalitaulusta. Jos joukkueilla olisi identtinen näyttönimi, korostus menisi
-molempiin riveihin. Älä riko tätä sopimusta ilman että korjaat manuaalipuolen
-samalla.
+**`palot` on luku, ei HTML.** Template piirtää X-merkit ja rivittää ne neljän
+välein. Mallissa ei saa olla HTML:ää eikä templatessa `|safe`-suodatinta.
 
-**`palot` on HTML-merkkijono, joka renderöidään `|safe`-suodattimella.**
-`parsi_x_palot()` tuottaa vain `X`- ja `<br/>`-merkkejä. Pidä se sellaisena.
+**Palosarake renderöidään aina**, myös tyhjänä. Widget on upotettu
+ulkopuolisille sivuille, ja ehdollinen solu muutti taulun leveyttä joka kerta
+kun sisävuoro vaihtui tai jakso päättyi.
 
 **Widgetin URL-sopimus on julkinen eikä sitä saa muuttaa:** `/<ottelunumero>`,
 valinnaiset `?style=<default|siipe>` ja `?debug=on`. Tauluja on upotettu
-ulkopuolisille sivuille.
+ulkopuolisille sivuille. `style` validoidaan `routes.TYYLIT`-listaa vasten;
+tuntematon arvo palautuu oletukseen.
 
 ### pesistulokset-API:n kummallisuudet
 
@@ -124,7 +145,8 @@ käytä niitä totuutena, älä arvaa kenttien muotoa.
 - **Alkamaton ottelu palauttaa `{"result": null}`.** Joukkueiden nimet saa silti
   `/match`-kutsulla.
 - **`isPeriodMatch: false` tarkoittaa junioriottelua**: ei jaksovoittoja, vain
-  yksi jaksosarake, otteluinfoksi "Junioriottelu".
+  yksi tulossarake, lisätiedoksi "Junioriottelu". Tilarivillä näytetään pelkkä
+  vuoropari, ei jaksoa — jaksoja ei ole.
 - **Päättyneessä ottelussa `batTurn` ja `outCount` jäävät viimeiseen tilaansa.**
   Tuotepäätös: koko taulu näytetään silti normaalisti, vain tilarivillä lukee
   "Ottelu on päättynyt".
@@ -144,27 +166,38 @@ tiedostettu asia eikä unohdus.
 ### Tietokantariippuvuus
 
 Livetaulun **täytyy** toimia ilman tietokantaa. `MANUAALITAULU_KAYTOSSA = False`
-ajaa sovelluksen kokonaan ilman kantaa, ja `tests/test_reitit.py`:n
-`IlmanTietokantaaTesti` varmistaa ettei `get_db`-kutsua tapahdu. `app.db`
-importataan tarkoituksella funktioiden sisällä, ei moduulin alussa.
+ajaa sovelluksen kokonaan ilman kantaa: manuaalitaulun blueprintiä ei edes
+rekisteröidä, jolloin sovelluksessa ei ole yhtään kantaan koskevaa reittiä.
+`tests/test_reitit.py`:n `LivetauluTesti.test_kantaan_ei_kosketa` varmistaa
+ettei `get_db`-kutsua tapahdu. `app.db` importataan tarkoituksella funktioiden
+sisällä, ei moduulin alussa.
 
 Reitityssääntö: numero on manuaaliottelu jos ja vain jos se löytyy kannasta
 rivinä, jossa `pesistulokset = 0`. **Kannassa on vanhoja `pesistulokset = 1`
 -rivejä** ajalta jolloin scrape kirjoitti tuloksia kantaan. Ne eivät ole
 manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
 
+Reitityspäätös välimuistitetaan **vain kielteisenä**: kun numero tiedetään
+liveotteluksi, kantaa ei kysellä uudelleen ennen `REITITYS_TTL`:n umpeutumista.
+Manuaaliottelun rivi haetaan aina, koska sen tiedot muuttuvat.
+
 ## Tiedostot
 
 | Tiedosto | Vastuu |
 | --- | --- |
+| `app/__init__.py` | Sovellustehdas `luo_sovellus()` |
+| `app/tulostaulu.py` | Näkymämalli + jaetut tekstit. Ei dataa, ei I/O:ta |
+| `app/live.py` | Livetaulu: API-vastaus → näkymämalli |
 | `app/pesistulokset_api.py` | HTTP-kutsut + välimuisti + virheensieto |
-| `app/live.py` | API-vastaus → tulostaulun näkymämalli |
-| `app/routes.py` | Reititys live/manuaali, ei bisneslogiikkaa |
+| `app/manuaali.py` | Manuaalitaulu: kantarivi → näkymämalli + omat reitit |
 | `app/db.py`, `app/models.py` | Vain manuaalitaulu |
-| `app/functions.py` | Jaettuja apufunktioita molemmille tauluille |
+| `app/routes.py` | Widgetin osoitteet + reitityspäätös, ei bisneslogiikkaa |
+| `app/asetukset.py` | Asetusten luku ajonaikaisesti |
+| `app/loki.py` | Debug-tulostus. Ainoa molempien tarvitsema apumoduuli |
 | `app/templates/tulostaulu.html` | Itse taulu, haetaan selaimeen 5 s välein |
 | `app/templates/ottelu.html` | Widgetin kehyssivu + pollaus |
-| `tools/esikatselu.py` | Ei osa sovellusta; renderöi taulun eri tiloissa |
+| `app/templates/index.html`, `update_ottelu.html` | Vain manuaalitaulu |
+| `tools/esikatselu.py` | Ei osa sovellusta; renderöi taulut eri tiloissa |
 
 ## Tiedossa olevat avoimet kohdat
 
@@ -180,15 +213,26 @@ manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
 - **`details.inning_count` ja `meta.super_inning_in_use` ovat käyttämättä.**
   Säännöt sallivat juniori- ja turnausotteluissa 3 tai 2 vuoroparin jaksot,
   ja Superpesiksen runkosarjassa supervuoroa ei pelata lainkaan. Koodi
-  olettaa yhä neljä vuoroparia ja S-sarakkeen aina.
+  olettaa yhä neljä vuoroparia ja S-sarakkeen aina. Sarakkeet tulevat nyt
+  listana (`Tulostaulu.jaksot`) eivätkä kiinteinä kenttinä, joten tämän saa
+  korjattua muuttamalla `JAKSOJEN_OTSIKOT`-valintaa `app/live.py`:ssä —
+  template mukautuu itse.
 - **`/online/<id>/events` on dokumentoimaton mutta hyödyllinen.** Se antaa
   ottelun tapahtumat ja ylätasolla luotettavan nykytilan (`period`, `inning`,
   `bat_turn`, `team`). Hyvä ristiintarkistukseen, mutta älä ota tuotannon
   datalähteeksi: dokumentoimaton, eri polun takana, ja `finished` laahaa.
-- `/uusi` ja `/paivita` ovat ilman mitään tunnistautumista.
+- `/`, `/uusi` ja `/paivita` ovat ilman mitään tunnistautumista.
 - `app/db.py`:n istunnonhallinta on omalaatuista (`update_match` sulkee
   yhteyden `finally`-lohkossa, `get_match_by_ottelunumero` luo uuden istunnon
-  joka kutsulla). Peruja vanhasta versiosta; ei koskettu tässä refaktoroinnissa.
+  joka kutsulla). Peruja vanhasta versiosta; ei koskettu refaktoroinneissa,
+  koska kehitysympäristössä ei ole MySQL:ää eikä muutosta voi todentaa.
+- **`jakso_txt`- ja `vuoropari_txt`-sarakkeet ovat kannassa käyttämättöminä.**
+  Niitä ei enää kirjoiteta eikä lueta; teksti muodostetaan numeroista.
+  Sarakkeet voi poistaa kantamigraatiolla, kun se on muutenkin ajankohtaista.
+- **Manuaalitaulun editoria ei ole testattu oikeaa kantaa vasten** tämän
+  refaktoroinnin jälkeen. Sovitin ja tekstit on katettu tynkäriveillä
+  (`tests/test_manuaali.py`), mutta `/paivita`-näkymän napit kannattaa
+  kokeilla kerran oikeassa ympäristössä.
 
 ## Cowork-sessioissa
 

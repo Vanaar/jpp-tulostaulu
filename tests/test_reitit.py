@@ -1,13 +1,16 @@
 # tests/test_reitit.py
-"""
-Reittien ja tulostaulun renderöinnin savutestit.
+"""Reittien ja tulostaulun renderöinnin savutestit.
 
-HTTP-kutsut pesistulokset-API:in on korvattu paikallisella vastaajalla, joten
-testit eivät tarvitse verkkoyhteyttä.
+HTTP-kutsut pesistulokset-API:in on korvattu paikallisella vastaajalla ja
+manuaalitaulun kantahaku tynkäfunktiolla, joten testit eivät tarvitse
+verkkoyhteyttä eivätkä tietokantaa.
 
 `config.py`:ssä on silti oltava `PESISTULOKSET_API_KEY`. Avain luetaan ennen
 kuin mockattu `requests.get` ehtii vastata, joten ilman sitä reitit palauttavat
 503:n ja testit kaatuvat. Avaimen arvolla ei ole väliä.
+
+Sovellus rakennetaan tehtaalla `app.luo_sovellus`, samalla koodilla kuin
+tuotannossa - reittejä ei siis tarvitse enää ylläpitää kahdessa paikassa.
 
 Aja projektin juuresta:
 
@@ -21,32 +24,14 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app import luo_sovellus  # noqa: E402
 from test_live import (  # noqa: E402
     OTTELU_129199,
     OTTELU_129209,
     TULOS_129209,
     kaynnissa_oleva_tulos,
 )
-
-
-def luo_sovellus():
-    """Rakentaa Flask-sovelluksen samoin kuin jpp-tulostaulu.py.
-
-    Varsinaista käynnistystiedostoa ei voi importata, koska sen nimessä on
-    väliviiva.
-    """
-    from flask import Flask, render_template
-
-    from app.routes import routes_bp
-
-    app = Flask(__name__, template_folder='../app/templates', static_folder='../static')
-    app.register_blueprint(routes_bp)
-
-    @app.route("/")
-    def jpp_tulostaulu():
-        return render_template('index.html')
-
-    return app
+from test_manuaali import tekaistu_rivi  # noqa: E402
 
 
 class FakeResponse:
@@ -78,14 +63,33 @@ def tee_vastaaja(ottelut, tulokset):
     return get
 
 
-class ReittiTesti(unittest.TestCase):
+def aseta_manuaalitaulu(testi, kaytossa):
+    """Kytkee manuaalitaulun päälle tai pois testin ajaksi."""
+    from config import Config
+
+    alkuperainen = getattr(Config, "MANUAALITAULU_KAYTOSSA", True)
+    Config.MANUAALITAULU_KAYTOSSA = kaytossa
+    testi.addCleanup(setattr, Config, "MANUAALITAULU_KAYTOSSA", alkuperainen)
+
+
+def tyhjenna_valimuistit(testi):
+    from app import pesistulokset_api, routes
+
+    pesistulokset_api.tyhjenna_valimuisti()
+    routes.unohda_reititys()
+    testi.addCleanup(routes.unohda_reititys)
+    testi.addCleanup(pesistulokset_api.tyhjenna_valimuisti)
+
+
+class LivetauluTesti(unittest.TestCase):
+    """Livetaulu ilman manuaalitaulua: kantaan ei kosketa lainkaan."""
+
     ottelut = {129209: OTTELU_129209, 129199: OTTELU_129199}
     tulokset = {129209: TULOS_129209}
 
     def setUp(self):
-        from app import pesistulokset_api
-
-        pesistulokset_api.tyhjenna_valimuisti()
+        tyhjenna_valimuistit(self)
+        aseta_manuaalitaulu(self, False)
 
         # Ladataan sovellus vasta kun requests on korvattu
         self.patcher = mock.patch(
@@ -131,6 +135,14 @@ class ReittiTesti(unittest.TestCase):
         vastaus = self.client.get("/129209?style=siipe")
         self.assertIn("scoreboard_siipe.css", vastaus.get_data(as_text=True))
 
+    def test_tuntematon_tyyli_palautuu_oletukseen(self):
+        # Tyyli päätyy suoraan <link href>:iin, joten se sallitaan vain
+        # tunnetuista arvoista.
+        vastaus = self.client.get("/129209?style=../../salainen")
+        sisalto = vastaus.get_data(as_text=True)
+        self.assertIn("scoreboard_default.css", sisalto)
+        self.assertNotIn("salainen", sisalto)
+
     def test_sisavuoro_korostuu_kaynnissa_olevassa_ottelussa(self):
         from app import pesistulokset_api
 
@@ -146,6 +158,40 @@ class ReittiTesti(unittest.TestCase):
         self.assertIn("sisavuoro", sisalto)
         self.assertIn("1. jakso / 2. lopettava", sisalto)
         self.assertIn("XX", sisalto)
+
+    def test_palosarake_on_aina_olemassa(self):
+        # Taulun leveys ei saa muuttua sisävuoron mukaan: widget on upotettu
+        # ulkopuolisille sivuille, joissa leveyden heittely näkyy nykäyksenä.
+        paattynyt = self.client.get("/129209/tulostaulu").get_data(as_text=True)
+        self.assertEqual(paattynyt.count("class='palot'"), 2)
+
+        from app import pesistulokset_api
+
+        pesistulokset_api.tyhjenna_valimuisti()
+        self.patcher.stop()
+        with mock.patch(
+            "app.pesistulokset_api.requests.get",
+            side_effect=tee_vastaaja(self.ottelut, {129209: kaynnissa_oleva_tulos()}),
+        ):
+            kaynnissa = self.client.get("/129209/tulostaulu").get_data(as_text=True)
+        self.patcher.start()
+
+        self.assertEqual(kaynnissa.count("class='palot'"), 2)
+
+    def test_palot_eivat_ole_html_merkkijono(self):
+        # Palot piirretään templatessa X-merkkeinä; mallissa ne ovat luku.
+        from app import pesistulokset_api
+
+        pesistulokset_api.tyhjenna_valimuisti()
+        self.patcher.stop()
+        with mock.patch(
+            "app.pesistulokset_api.requests.get",
+            side_effect=tee_vastaaja(self.ottelut, {129209: kaynnissa_oleva_tulos()}),
+        ):
+            sisalto = self.client.get("/129209/tulostaulu").get_data(as_text=True)
+        self.patcher.start()
+
+        self.assertIn("<td class='palot'>XX</td>", sisalto)
 
     def test_valimuisti_rajoittaa_api_kutsuja(self):
         from app import pesistulokset_api
@@ -167,34 +213,38 @@ class ReittiTesti(unittest.TestCase):
         # 20 selainpyyntöä -> korkeintaan yksi match- ja yksi live-result-kutsu
         self.assertLessEqual(kutsut["n"], 2)
 
+    def test_kantaan_ei_kosketa(self):
+        with mock.patch(
+            "app.db.get_db", side_effect=AssertionError("kantaa ei saa käyttää")
+        ):
+            vastaus = self.client.get("/129209/tulostaulu")
+        self.assertEqual(vastaus.status_code, 200)
+        self.assertIn("Jussittaret", vastaus.get_data(as_text=True))
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_manuaalireitit_pois_kaytosta(self):
+        self.assertEqual(self.client.get("/").status_code, 404)
+        self.assertEqual(self.client.get("/uusi").status_code, 404)
+        self.assertEqual(self.client.get("/paivita/512345").status_code, 404)
 
 
-class IlmanTietokantaaTesti(unittest.TestCase):
-    """Livetaulun on toimittava, vaikka tietokantaa ei olisi lainkaan."""
+class ManuaalitauluTesti(unittest.TestCase):
+    """Manuaalitaulu renderöityy samasta templatesta kuin livetaulu.
+
+    Kantahaku on korvattu tynkäfunktiolla, joten testi ei tarvitse MySQL:ää.
+    """
 
     def setUp(self):
-        from app import pesistulokset_api, routes
-        from config import Config
+        tyhjenna_valimuistit(self)
+        aseta_manuaalitaulu(self, True)
 
-        pesistulokset_api.tyhjenna_valimuisti()
-        routes._tyhjenna_reititys()
+        self.rivi = tekaistu_rivi()
+        self.haut = {"n": 0}
 
-        self.alkuperainen = getattr(Config, "MANUAALITAULU_KAYTOSSA", True)
-        Config.MANUAALITAULU_KAYTOSSA = False
-        self.addCleanup(
-            setattr, Config, "MANUAALITAULU_KAYTOSSA", self.alkuperainen
-        )
-        self.addCleanup(routes._tyhjenna_reititys)
+        def hae(ottelunumero):
+            self.haut["n"] += 1
+            return self.rivi if ottelunumero == self.rivi.ottelunumero else None
 
-        patcher = mock.patch(
-            "app.pesistulokset_api.requests.get",
-            side_effect=tee_vastaaja(
-                {129209: OTTELU_129209}, {129209: TULOS_129209}
-            ),
-        )
+        patcher = mock.patch("app.manuaali.hae_ottelurivi", side_effect=hae)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -202,12 +252,45 @@ class IlmanTietokantaaTesti(unittest.TestCase):
         app.config["TESTING"] = True
         self.client = app.test_client()
 
-    def test_livetaulu_toimii(self):
-        with mock.patch("app.db.get_db", side_effect=AssertionError("kantaa ei saa käyttää")):
-            vastaus = self.client.get("/129209/tulostaulu")
+    def test_manuaalitaulu_renderoityy(self):
+        vastaus = self.client.get("/512345/tulostaulu")
         self.assertEqual(vastaus.status_code, 200)
-        self.assertIn("Jussittaret", vastaus.get_data(as_text=True))
+        sisalto = vastaus.get_data(as_text=True)
+        self.assertIn("Siilinjärven Pesis", sisalto)
+        self.assertIn("Puijon Pesis", sisalto)
+        self.assertIn("1. jakso / 1. aloittava", sisalto)
 
-    def test_manuaalireitit_pois_kaytosta(self):
-        self.assertEqual(self.client.get("/uusi").status_code, 404)
-        self.assertEqual(self.client.get("/paivita/512345").status_code, 404)
+    def test_sisavuoro_korostuu(self):
+        sisalto = self.client.get("/512345/tulostaulu").get_data(as_text=True)
+        self.assertIn("sisavuoro", sisalto)
+
+    def test_palot_naytetaan_x_merkkeina(self):
+        sisalto = self.client.get("/512345/tulostaulu").get_data(as_text=True)
+        self.assertIn("<td class='palot'>XX</td>", sisalto)
+
+    def test_debug_rivi_kertoo_lahteen(self):
+        sisalto = self.client.get("/512345/tulostaulu?debug=on").get_data(as_text=True)
+        self.assertIn("Manuaalinen", sisalto)
+
+    def test_manuaaliottelu_haetaan_joka_pyynnolla(self):
+        # Manuaalitaulun tiedot muuttuvat, joten rivi on haettava uudelleen.
+        for _ in range(5):
+            self.client.get("/512345/tulostaulu")
+        self.assertEqual(self.haut["n"], 5)
+
+    def test_liveottelun_reitityspaatos_valimuistitetaan(self):
+        # Livetaulun ei pidä kysellä kannasta joka päivityksellä.
+        with mock.patch(
+            "app.pesistulokset_api.requests.get",
+            side_effect=tee_vastaaja({129209: OTTELU_129209}, {129209: TULOS_129209}),
+        ):
+            for _ in range(20):
+                self.client.get("/129209/tulostaulu")
+        self.assertEqual(self.haut["n"], 1)
+
+    def test_manuaalireitit_ovat_kaytossa(self):
+        self.assertEqual(self.client.get("/").status_code, 200)
+
+
+if __name__ == "__main__":
+    unittest.main()

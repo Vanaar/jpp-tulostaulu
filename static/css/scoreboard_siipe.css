@@ -36,6 +36,14 @@ table {
   tr.tulosrivi td.tulos {
     background-color: gold;
   }
+
+  /* Palosarake on aina olemassa, myös tyhjänä. Ilman tätä sääntöä
+     "tr.tulosrivi td" olisi tarkempi kuin "td.palot" ja maalaisi tyhjän
+     palosolun valkoiseksi. */
+  tr.tulosrivi td.palot {
+    background-color: transparent;
+    border: none;
+  }
   
   td.sisavuoro {
     background-color: lightsalmon !important; ;

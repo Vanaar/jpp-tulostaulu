@@ -6,7 +6,18 @@ Junnut Pelaa Pesistä -tulostaulu suomalaisen pesäpallon peleihin.
 
 - **Livetaulu** hakee ottelun tiedot Pesäpalloliiton pesistulokset-API:sta.
   Ei käytä tietokantaa lainkaan.
-- **Manuaalitaulu** toimii kuten ennenkin ja käyttää MySQL-tietokantaa.
+- **Manuaalitaulu** on käsin päivitettävä ja käyttää MySQL-tietokantaa.
+
+Taulut ovat erillisiä toteutuksia, jotka rakentavat saman näkymämallin
+(`app/tulostaulu.py`) ja renderöityvät samasta templatesta:
+
+| Moduuli | Datalähde |
+| --- | --- |
+| `app/live.py` | pesistulokset-API |
+| `app/manuaali.py` | MySQL + editorin reitit `/`, `/uusi`, `/paivita` |
+
+Asetuksella `MANUAALITAULU_KAYTOSSA = False` sovellus ajaa pelkkää livetaulua
+eikä tarvitse tietokantaa lainkaan.
 
 ## Käyttö
 

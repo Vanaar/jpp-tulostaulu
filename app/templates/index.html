@@ -1,11 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html lang="fi">
 <head>
-    <title>Päivitä ottelun tietoja</title>
+    <meta charset="UTF-8">
+    <title>Junnut Pelaa Pesistä -manuaalitaulu</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-    <h1>Junnut Pelaa Pesistä -tulostaulu (v2)</h1>
+    <h1>Junnut Pelaa Pesistä &ndash; manuaalitaulu</h1>
+
+    <p>Käsin päivitettävä tulostaulu. Pesistulokset-API:sta tulevat ottelut
+    näkyvät suoraan osoitteessa <code>/&lt;ottelunumero&gt;</code> eivätkä
+    tarvitse tätä sivua.</p>
 
     <a href="/uusi">Aloita uusi ottelu</a>
 
@@ -16,19 +21,10 @@
     </form>
 
     <script>
-        // JavaScript to add functionality to the form
         document.getElementById('updateForm').addEventListener('submit', function(event) {
-            // Prevent the default form submission behavior
             event.preventDefault();
-
-            // Get the value entered in the text input field
-            var matchNumber = document.getElementById('ottelunumero').value;
-
-            // Construct the URL with the match number
-            var url = "/paivita/" + matchNumber;
-
-            // Redirect the user to the constructed URL
-            window.location.href = url;
+            var ottelunumero = document.getElementById('ottelunumero').value;
+            window.location.href = "/paivita/" + encodeURIComponent(ottelunumero);
         });
     </script>
 

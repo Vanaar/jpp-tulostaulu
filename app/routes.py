@@ -1,40 +1,62 @@
-from flask import request, redirect, render_template, Blueprint
+# routes.py
+"""Widgetin julkiset osoitteet ja päätös siitä, kumpi taulu näytetään.
+
+    /<ottelunumero>              kehyssivu, joka pollaa alla olevaa osoitetta
+    /<ottelunumero>/tulostaulu   itse taulu
+
+URL-sopimus on julkinen eikä sitä saa muuttaa: tauluja on upotettu
+ulkopuolisille sivuille. Valinnaiset parametrit ovat `?style=` ja `?debug=on`.
+
+Tässä moduulissa ei ole kummankaan taulun logiikkaa, vain reititys:
+
+    app/live.py      livetaulu, data pesistulokset-API:sta
+    app/manuaali.py  manuaalitaulu, data tietokannasta
+
+Reitityssääntö: numero on manuaaliottelu jos ja vain jos se löytyy kannasta
+rivinä, jossa `pesistulokset = 0`.
+"""
+
 from threading import RLock
 
-from app.functions import debug_message
-from app.live import rakenna_ottelu
-from app.pesistulokset_api import ApiVirhe, hae_live_tulos, hae_ottelu
-from config import Config
+from flask import Blueprint, render_template, request
 
-import constants
+from app import manuaali
+from app.asetukset import asetus
+from app.live import rakenna_ottelu
+from app.loki import DEBUG_MESSAGE_LEVEL_ERROR, debug_message
+from app.pesistulokset_api import ApiVirhe, hae_live_tulos, hae_ottelu
+
 import time
 
 
-routes_bp = Blueprint('routes', __name__)
+routes_bp = Blueprint("routes", __name__)
 
 
-# Ottelunumeroiden reitityksen välimuisti: kertoo, onko numero manuaaliottelu.
-# Näin livetaulu ei tee tietokantakyselyä joka päivityksellä.
-_REITITYS_TTL = getattr(Config, 'REITITYS_TTL', 60)
+# Käytettävissä olevat tyylitiedostot: static/css/scoreboard_<nimi>.css.
+# Tuntematon arvo palautuu oletukseen, jottei URL-parametri voi osoittaa
+# olemattomaan tiedostoon.
+TYYLIT = ("default", "siipe")
+OLETUSTYYLI = "default"
+
+
+# Muistetaan, mitkä ottelunumerot EIVÄT ole manuaaliotteluita, jottei livetaulu
+# tee kantakyselyä joka päivityksellä. Manuaaliottelun rivi haetaan aina
+# kannasta, koska sen tiedot muuttuvat.
 _reititys = {}
 _reititys_lukko = RLock()
 
 
-def _paivitysvali():
+def _reititys_ttl():
+    return asetus("REITITYS_TTL", 60)
+
+
+def paivitysvali():
     """Kuinka usein selain hakee tulostaulun palvelimelta (ms)."""
-    return getattr(Config, 'TULOSTAULU_PAIVITYSVALI_MS', 5000)
+    return asetus("TULOSTAULU_PAIVITYSVALI_MS", 5000)
 
 
-def _manuaalitaulu_kaytossa():
-    """Onko manuaalitaulu (ja sitä myöten tietokanta) käytössä.
-
-    Jos asetus on False, sovellus toimii kokonaan ilman tietokantaa ja
-    näyttää pelkkiä livetauluja.
-    """
-    return getattr(Config, 'MANUAALITAULU_KAYTOSSA', True)
-
-
-def _tyhjenna_reititys(ottelunumero=None):
+def unohda_reititys(ottelunumero=None):
+    """Unohtaa reitityspäätöksen. Kutsutaan kun uusi manuaaliottelu luodaan."""
     with _reititys_lukko:
         if ottelunumero is None:
             _reititys.clear()
@@ -42,44 +64,38 @@ def _tyhjenna_reititys(ottelunumero=None):
             _reititys.pop(ottelunumero, None)
 
 
-def _on_manuaaliottelu(ottelunumero):
-    """Onko ottelunumero kannassa manuaalisesti päivitettävänä otteluna.
+def _valitse_tyyli(arvo):
+    return arvo if arvo in TYYLIT else OLETUSTYYLI
 
-    Vastaus välimuistitetaan lyhyeksi aikaa, koska ottelun tyyppi ei muutu
-    kesken ottelun. Kannassa saattaa olla vanhoja rivejä, joita aiemmin
-    päivitettiin www-scrapella (pesistulokset = 1); ne eivät ole
-    manuaaliotteluita vaan ohjautuvat nykyään API-toteutukseen.
+
+def _manuaalirivi(ottelunumero):
+    """Manuaaliottelun kantarivi tai None, jos numero ei ole manuaaliottelu.
+
+    Livetaululle tämä on korkeintaan yksi kantakysely per REITITYS_TTL, ei per
+    selainpyyntö. Manuaaliottelu haetaan aina kannasta, koska sen tiedot
+    muuttuvat. Ilman manuaalitaulua kantaan ei koskettu lainkaan.
     """
-    if not _manuaalitaulu_kaytossa():
-        return False
+    if not manuaali.kaytossa():
+        return None
 
     with _reititys_lukko:
         merkinta = _reititys.get(ottelunumero)
-    if merkinta and (time.monotonic() - merkinta[1]) < _REITITYS_TTL:
-        return merkinta[0]
 
-    on_manuaali = _hae_manuaaliottelu(ottelunumero) is not None
+    if merkinta is not None:
+        on_manuaali, hetki = merkinta
+        if not on_manuaali and (time.monotonic() - hetki) < _reititys_ttl():
+            return None
+
+    rivi = manuaali.hae_ottelurivi(ottelunumero)
 
     with _reititys_lukko:
-        _reititys[ottelunumero] = (on_manuaali, time.monotonic())
-    return on_manuaali
+        _reititys[ottelunumero] = (rivi is not None, time.monotonic())
+
+    return rivi
 
 
-def _hae_manuaaliottelu(ottelunumero):
-    """Palauttaa manuaaliottelun kantarivin tai None."""
-    if not _manuaalitaulu_kaytossa():
-        return None
-
-    from app.db import get_db
-
-    ottelu = get_db().get_match_by_ottelunumero(ottelunumero)
-    if ottelu and not ottelu.pesistulokset:
-        return ottelu
-    return None
-
-
-def _hae_liveottelu(ottelunumero):
-    """Rakentaa livetulostaulun näkymämallin API:sta. Ei käytä tietokantaa."""
+def _hae_livetaulu(ottelunumero):
+    """Livetaulun Tulostaulu API:sta. Ei käytä tietokantaa."""
     ottelu_data = hae_ottelu(ottelunumero)
     if not ottelu_data:
         return None
@@ -88,92 +104,52 @@ def _hae_liveottelu(ottelunumero):
     return rakenna_ottelu(ottelunumero, ottelu_data, tulos)
 
 
-@routes_bp.route("/uusi")
-def uusi_ottelu():
-    if not _manuaalitaulu_kaytossa():
-        return "Manuaalitaulu ei ole käytössä.", 404
-
-    from app.db import get_db
-
-    numero = get_db().uusi_ottelu()
-    _tyhjenna_reititys(numero)
-    return redirect(f'/paivita/{numero}')
-
-
 @routes_bp.route("/hellurei")
 def hellurei():
     return "Oujee!"
 
 
-@routes_bp.route("/paivita/<int:ottelunumero>/<int:muokattava_osio>", methods=['GET', 'POST'])
-@routes_bp.route("/paivita/<int:ottelunumero>", defaults={'muokattava_osio': 1}, methods=['GET', 'POST'])
-def paivita_ottelu(ottelunumero, muokattava_osio):
-    if not _manuaalitaulu_kaytossa():
-        return "Manuaalitaulu ei ole käytössä.", 404
-
-    from app.db import get_db
-
-    if muokattava_osio < 0 or muokattava_osio is None:
-        muokattava_osio = 1
-    elif muokattava_osio > 4:
-        muokattava_osio = 4
-
-    db = get_db()
-    if request.method == 'POST':
-        db.update_match(ottelunumero, request.form)
-
-    ottelu = db.get_match_by_ottelunumero(ottelunumero)
-    if ottelu:
-        return render_template('update_ottelu.html', ottelu=ottelu, muokattava_osio=muokattava_osio)
-    else:
-        return "Ottelua ei löydy tällä numerolla."
-
-
-@routes_bp.route("/<int:ottelunumero>", methods=['GET'])
+@routes_bp.route("/<int:ottelunumero>", methods=["GET"])
 def ottelu_tulostaulu(ottelunumero):
-    """Widgetin osoite: /<ottelunumero>. Käyttö säilyy ennallaan."""
-    debug = request.args.get('debug', 'off')
-    style = request.args.get('style', 'default')
+    """Widgetin kehyssivu. Osoite on julkinen sopimus, älä muuta."""
+    debug = request.args.get("debug", "off")
+    tyyli = _valitse_tyyli(request.args.get("style", OLETUSTYYLI))
 
-    # Manuaalitaulu tunnistetaan kannasta, muuten tiedot haetaan API:sta
-    if _on_manuaaliottelu(ottelunumero):
-        ottelu = _hae_manuaaliottelu(ottelunumero)
-        if ottelu:
-            return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False,
-                                   debug=debug, style=style,
-                                   paivitysvali=_paivitysvali())
+    if _manuaalirivi(ottelunumero) is None:
+        # Ei manuaaliottelu -> varmistetaan että ottelu on olemassa API:ssa,
+        # jottei kehyssivu jää pollaamaan olematonta ottelua.
+        try:
+            if hae_ottelu(ottelunumero) is None:
+                return "Ottelua ei löydy.", 404
+        except ApiVirhe as e:
+            debug_message(f"ApiVirhe: {e}", DEBUG_MESSAGE_LEVEL_ERROR)
+            return "Pesistulokset-palveluun ei juuri nyt saada yhteyttä.", 503
 
-    try:
-        if hae_ottelu(ottelunumero) is None:
-            return "Ottelua ei ole tietokannassa eikä myöskään pesistuloksissa.", 404
-    except ApiVirhe as e:
-        debug_message(f"ApiVirhe: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
-        return "Pesistulokset-palveluun ei juuri nyt saada yhteyttä.", 503
-
-    return render_template('ottelu.html', ottelu={'ottelunumero': ottelunumero},
-                           pesistulokset=True, debug=debug, style=style,
-                           paivitysvali=_paivitysvali())
+    return render_template(
+        "ottelu.html",
+        ottelunumero=ottelunumero,
+        debug=debug,
+        style=tyyli,
+        paivitysvali=paivitysvali(),
+    )
 
 
-@routes_bp.route("/<int:ottelunumero>/tulostaulu", methods=['GET'])
+@routes_bp.route("/<int:ottelunumero>/tulostaulu", methods=["GET"])
 def nayta_tulostaulu(ottelunumero):
     """Selain hakee tämän muutaman sekunnin välein ja korvaa taulun sisällön."""
-    debug = request.args.get('debug', 'off')
+    debug = request.args.get("debug", "off")
 
-    if _on_manuaaliottelu(ottelunumero):
-        ottelu = _hae_manuaaliottelu(ottelunumero)
-        if ottelu:
-            return render_template('tulostaulu.html', ottelu=ottelu, debug=debug,
-                                   pesistulokset=False, style='default')
+    rivi = _manuaalirivi(ottelunumero)
+    taulu = manuaali.rakenna_tulostaulu(rivi) if rivi is not None else None
 
-    try:
-        ottelu = _hae_liveottelu(ottelunumero)
-    except ApiVirhe as e:
-        debug_message(f"ApiVirhe: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
-        return "", 503
+    if taulu is None:
+        try:
+            taulu = _hae_livetaulu(ottelunumero)
+        except ApiVirhe as e:
+            debug_message(f"ApiVirhe: {e}", DEBUG_MESSAGE_LEVEL_ERROR)
+            return "", 503
 
-    if ottelu is None:
+    if taulu is None:
         return "", 404
 
-    return render_template('tulostaulu.html', ottelu=ottelu, debug=debug,
-                           pesistulokset=True, style='default')
+    return render_template("tulostaulu.html", ottelu=taulu, debug=debug)

@@ -3,6 +3,9 @@
 tarkistusta varten. Ei osa sovellusta.
 
     python tools/esikatselu.py > esikatselu.html
+
+Livetaulut renderöidään testidatasta ja manuaalitaulu tekaistusta kantarivistä,
+joten skripti ei tarvitse verkkoyhteyttä eikä tietokantaa.
 """
 
 import os
@@ -14,19 +17,24 @@ JUURI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, JUURI)
 sys.path.insert(0, os.path.join(JUURI, "tests"))
 
+from config import Config  # noqa: E402
+
+# Esikatselu näyttää pelkkiä tauluja, joten kantaa ei tarvita. Asetettava
+# ennen sovelluksen rakentamista, koska tehdas rekisteröi manuaalireitit vain
+# jos manuaalitaulu on käytössä.
+Config.DEBUG = False
+Config.MANUAALITAULU_KAYTOSSA = False
+
+from app import luo_sovellus  # noqa: E402
+from app import pesistulokset_api, routes  # noqa: E402
 from test_live import (  # noqa: E402
     OTTELU_129199,
     OTTELU_129209,
     TULOS_129209,
     kaynnissa_oleva_tulos,
 )
-from test_reitit import luo_sovellus, tee_vastaaja  # noqa: E402
-
-from app import pesistulokset_api  # noqa: E402
-import app.routes as routes  # noqa: E402
-from config import Config  # noqa: E402
-
-Config.DEBUG = False
+from test_manuaali import tekaistu_rivi  # noqa: E402
+from test_reitit import tee_vastaaja  # noqa: E402
 
 _app = luo_sovellus()
 _app.config["TESTING"] = True
@@ -35,12 +43,23 @@ _client = _app.test_client()
 
 def taulu(ottelut, tulokset, polku):
     pesistulokset_api.tyhjenna_valimuisti()
-    routes._tyhjenna_reititys()
+    routes.unohda_reititys()
     with mock.patch(
         "app.pesistulokset_api.requests.get",
         side_effect=tee_vastaaja(ottelut, tulokset),
     ):
         return _client.get(polku).get_data(as_text=True)
+
+
+def manuaalitaulu(**kentat):
+    """Renderöi manuaalitaulun tekaistusta kantarivistä."""
+    rivi = tekaistu_rivi(**kentat)
+    pesistulokset_api.tyhjenna_valimuisti()
+    routes.unohda_reititys()
+    with mock.patch.object(Config, "MANUAALITAULU_KAYTOSSA", True), mock.patch(
+        "app.manuaali.hae_ottelurivi", return_value=rivi
+    ):
+        return _client.get(f"/{rivi.ottelunumero}/tulostaulu").get_data(as_text=True)
 
 
 def scope(css, valitsin):
@@ -59,7 +78,7 @@ JUNIORI_TULOS = {
     "periods": {"home": 0, "away": 0},
     "runs": [{"home": [2, 1, 0, 3], "away": [1, 0, 2, None]}],
     "outCount": 1,
-    "currentPeriod": 0,
+    "currentPeriod": -1,
     "currentInning": 3,
     "batTurn": 1,
     "batTurnTeamKey": "away",
@@ -76,8 +95,26 @@ SUPERVUORO_TULOS = {
         {"home": [None], "away": [None]},
     ],
     "outCount": 1,
-    "currentPeriod": 2,
+    # currentPeriod 1 = 2. jakso on päättynyt -> menossa on supervuoro.
+    "currentPeriod": 1,
     "currentInning": 0,
+    "batTurn": 1,
+    "batTurnTeamKey": "away",
+    "finished": False,
+    "isPeriodMatch": True,
+}
+
+JAKSOTAUKO_TULOS = {
+    "periods": {"home": 1, "away": 0},
+    "runs": [
+        {"home": [2, 0, 0, 1], "away": [0, 1, 0, 0]},
+        {"home": [None, None, None, None], "away": [None, None, None, None]},
+        {"home": [None], "away": [None]},
+        {"home": [None], "away": [None]},
+    ],
+    "outCount": 3,
+    "currentPeriod": 0,
+    "currentInning": 3,
     "batTurn": 1,
     "batTurnTeamKey": "away",
     "finished": False,
@@ -98,9 +135,12 @@ def osio(otsikko, kuvaus, html):
 def main():
     paattynyt = taulu({129209: OTTELU_129209}, {129209: TULOS_129209}, "/129209/tulostaulu")
     kaynnissa = taulu({129209: OTTELU_129209}, {129209: kaynnissa_oleva_tulos()}, "/129209/tulostaulu")
+    jaksotauko = taulu({129209: OTTELU_129209}, {129209: JAKSOTAUKO_TULOS}, "/129209/tulostaulu")
     supervuoro = taulu({129209: OTTELU_129209}, {129209: SUPERVUORO_TULOS}, "/129209/tulostaulu")
     alkamaton = taulu({129199: OTTELU_129199}, {}, "/129199/tulostaulu")
     juniori = taulu({129209: OTTELU_129209}, {129209: JUNIORI_TULOS}, "/129209/tulostaulu")
+    manuaali = manuaalitaulu()
+    manuaali_palot = manuaalitaulu(palot="XXXXXXXXXXXX", jakso_nro=2, vuoropari_nro=9)
 
     with open(os.path.join(JUURI, "static/css/scoreboard_default.css"), encoding="utf-8") as f:
         default_css = f.read()
@@ -116,21 +156,31 @@ def main():
         osio("Käynnissä oleva ottelu",
              "1. jakso, 2. vuoropari, koti lyömässä lopettavana, 2 paloa. "
              "Sisävuoro on korostettu ja palot näkyvät lyövän joukkueen rivillä.", kaynnissa),
+        osio("Jaksotauko",
+             "1. jakso on ratkennut eikä 2. ole alkanut. Alkava jakso näytetään ilman "
+             "vuoroparia, eikä sisävuoroa tai paloja näytetä.", jaksotauko),
         osio("Supervuoro",
-             "Jaksot 1-1, menossa supervuoro. Vieras lyömässä.", supervuoro),
+             "Jaksot 1-1, menossa supervuoro. Vieras lyömässä lopettavana.", supervuoro),
         osio("Ottelu ei ole alkanut (129199)",
              "API palauttaa {&quot;result&quot;:null}. Joukkueiden nimet haetaan silti "
-             "/match-kutsulla ja tilariville tulee &quot;Ottelu ei ole alkanut&quot;.", alkamaton),
+             "/match-kutsulla. Taulu on saman levyinen kuin käynnissä olevassa "
+             "ottelussa, vain solut ovat tyhjiä.", alkamaton),
         osio("Junioriottelu",
-             "isPeriodMatch = false: ei jaksovoittoja, vain yksi jaksosarake ja "
-             "otteluinfoksi &quot;Junioriottelu&quot;.", juniori),
+             "isPeriodMatch = false: ei jaksovoittoja, vain yksi tulossarake ja "
+             "lisätiedoksi &quot;Junioriottelu&quot;.", juniori),
+        osio("Manuaalitaulu",
+             "Sama template, eri datalähde: käsin päivitettävä taulu tietokannan rivistä. "
+             "Koti sisällä, 2 paloa.", manuaali),
+        osio("Manuaalitaulu, supervuoro ja 12 paloa",
+             "Palot rivittyvät neljän välein. Manuaalitaulussa niitä voi kertyä 12, "
+             "livetaulussa enintään kolme.", manuaali_palot),
     ])
 
     sivu = f"""<!DOCTYPE html>
 <html lang="fi">
 <head>
 <meta charset="utf-8">
-<title>JPP-tulostaulu - API-version esikatselu</title>
+<title>JPP-tulostaulu - esikatselu</title>
 <style>
 body{{font-family:-apple-system,Segoe UI,Arial,sans-serif;margin:0;padding:32px;background:#f6f7f9;color:#1a1d21}}
 h1{{font-size:22px;margin:0 0 6px}}
@@ -144,11 +194,11 @@ h4{{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8a9099;m
 </style>
 </head>
 <body>
-<h1>JPP-tulostaulu &ndash; pesistulokset-API -version esikatselu</h1>
-<p class="ingressi">Kaikki taulut on renderöity uudella koodilla suoraan API-datasta.
-Ottelu 129209 on liitteen esimerkkiottelu ja 129199 ottelu, jota ei ole vielä pelattu.
-Käynnissä oleva tilanne, supervuoro ja junioriottelu on rakennettu API:n muotoa noudattavasta
-testidatasta, koska otteluita ei juuri nyt ole käynnissä.</p>
+<h1>JPP-tulostaulu &ndash; esikatselu</h1>
+<p class="ingressi">Kaikki taulut on renderöity samasta templatesta samasta
+n&auml;kym&auml;mallista (app/tulostaulu.py). Livetaulut tulevat pesistulokset-API:n
+muotoisesta testidatasta ja manuaalitaulu tekaistusta kantarivist&auml;, joten
+sivun tekemiseen ei tarvita verkkoyhteytt&auml; eik&auml; tietokantaa.</p>
 {sisalto}
 </body>
 </html>"""

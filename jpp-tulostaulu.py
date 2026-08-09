@@ -1,13 +1,15 @@
-from flask import Flask, render_template
-from app.routes import routes_bp
+"""Kehityskäynnistys.
 
-app = Flask(__name__, template_folder='./app/templates', static_folder='static')
-app.register_blueprint(routes_bp)
+    flask --app jpp-tulostaulu run --debug --host=0.0.0.0
 
+Tiedoston nimessä on väliviiva, joten sitä ei voi importata. Sovellus
+rakennetaan siksi tehtaalla app/__init__.py:ssä, jota myös testit ja
+tools/esikatselu.py käyttävät - näin reitit ovat varmasti samat kaikkialla.
+"""
 
-@app.route("/")
-def jpp_tulostaulu():
-    return render_template('index.html')
+from app import luo_sovellus
+
+app = luo_sovellus()
 
 
 if __name__ == "__main__":

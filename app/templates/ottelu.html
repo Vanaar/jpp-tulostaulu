@@ -1,13 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="fi">
 <head>
     <meta charset="UTF-8">
     <title>Junnut Pelaa Pesistä -tulostaulu</title>
-    {% if style is not none %}
-        <link rel='stylesheet' href='/static/css/scoreboard_{{style}}.css'>
-    {% else %}
-    <link rel='stylesheet' href='/static/css/scoreboard_default.css'>
-    {% endif %}
+    <link rel='stylesheet' href='/static/css/scoreboard_{{ style }}.css'>
 </head>
 <body>
 <div id="tulostaulu"></div>
@@ -23,14 +19,13 @@
     // palvelimen puolella ja välimuistitetaan, joten selaimet eivät kuormita
     // API:a katsojamäärän mukaan.
     var PAIVITYSVALI = {{ paivitysvali | default(5000) }};
+    var TULOSTAULU_URL = {{ ("/%d/tulostaulu" % ottelunumero) | tojson }};
+    var DEBUG = {{ (debug == "on") | tojson }};
 
     function fetchTulostaulu() {
-        var ottelu_url = '/{{ottelu.ottelunumero}}/tulostaulu';
-        if ("{{debug}}" === "on") {
-            ottelu_url += "?debug=on";
-        }
+        var url = TULOSTAULU_URL + (DEBUG ? "?debug=on" : "");
 
-        fetch(ottelu_url)
+        fetch(url)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('HTTP ' + response.status);

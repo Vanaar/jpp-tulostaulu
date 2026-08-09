@@ -3,16 +3,13 @@ from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, ResourceClosedError
 from sqlalchemy.pool import QueuePool
-from sqlalchemy.orm import Session
-from app.functions import debug_message
-from app.functions import vuoropari_int_to_str
-from app.functions import jakso_into_to_str
+from app.loki import DEBUG_MESSAGE_LEVEL_ERROR, debug_message
+from app.manuaali import JAKSOJA, VUOROPAREJA
 from app.models import Otteludata
 from flask import g
 from config import Config
 
 import inspect
-import constants
 
 def get_db():
     """
@@ -77,17 +74,15 @@ class Database:
         try:
             debug_message(f"get_match_by_ottelunumero({ottelunumero}) called by: {inspect.stack()[1].function}")
             ottelu = self.session.query(Otteludata).filter_by(ottelunumero=ottelunumero).first()
-            if ottelu:
-                return ottelu
-            else:
+            if ottelu is None:
                 debug_message(f"Ottelua {ottelunumero} ei löytynyt kannasta")
-                return False
+            return ottelu
         except ResourceClosedError as e:
-            debug_message(f"ResourceClosedError: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
-            return False
+            debug_message(f"ResourceClosedError: {e}", DEBUG_MESSAGE_LEVEL_ERROR)
+            return None
         except Exception as e:
-            debug_message(f"Error: {e}", constants.DEBUG_MESSAGE_LEVEL_ERROR)
-            return False
+            debug_message(f"Error: {e}", DEBUG_MESSAGE_LEVEL_ERROR)
+            return None
         
     def uusi_ottelu(self, pesistulokset=0, ottelunumero=0):
         if pesistulokset == 1 and ottelunumero > 0:
@@ -101,9 +96,9 @@ class Database:
         return ottelu.ottelunumero
 
     def update_match(self, ottelunumero, params):
-        ottelu = self.get_match_by_ottelunumero(ottelunumero)  
+        ottelu = self.get_match_by_ottelunumero(ottelunumero)
 
-        if ottelu:
+        if ottelu is not None:
             if 'kotijoukkue' in params:
                 if ottelu.kotijoukkue == ottelu.nykyinen_lyontivuoro:
                     ottelu.nykyinen_lyontivuoro = params['kotijoukkue']
@@ -128,31 +123,28 @@ class Database:
                 if params['action'] == 'poista_palot':
                     ottelu.palot = ''
 
+                # jakso_txt- ja vuoropari_txt-sarakkeita ei enää kirjoiteta.
+                # Näkyvä teksti muodostetaan numeroista renderöintihetkellä
+                # (app/manuaali.py), jotta molemmat taulut käyttävät samoja
+                # tekstejä. Sarakkeet on jätetty kantaan koskematta.
                 if params['action'] == 'jakso_taakse':
                     if ottelu.jakso_nro > 1:
                         ottelu.jakso_nro = ottelu.jakso_nro - 1
-                        ottelu.jakso_txt = jakso_into_to_str(ottelu.jakso_nro)
                         ottelu.vuoropari_nro = 1
-                        ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
-                        
-                if params['action'] == 'jakso_eteenpain':
-                    if ottelu.jakso_nro < 4:
-                        ottelu.jakso_nro = ottelu.jakso_nro + 1
-                        ottelu.jakso_txt = jakso_into_to_str(ottelu.jakso_nro)
-                        ottelu.vuoropari_nro = 1
-                        ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
 
+                if params['action'] == 'jakso_eteenpain':
+                    if ottelu.jakso_nro < JAKSOJA:
+                        ottelu.jakso_nro = ottelu.jakso_nro + 1
+                        ottelu.vuoropari_nro = 1
 
                 if params['action'] == 'vuoropari_taakse':
                     if ottelu.vuoropari_nro > 1:
                         ottelu.vuoropari_nro = ottelu.vuoropari_nro - 1
-                        ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
                         self.vaihda_lyontivuoro(ottelu)
-            
+
                 if params['action'] == 'vuoropari_eteenpain':
-                    if ottelu.vuoropari_nro < 14:
+                    if ottelu.vuoropari_nro < VUOROPAREJA:
                         ottelu.vuoropari_nro = ottelu.vuoropari_nro + 1
-                        ottelu.vuoropari_txt = vuoropari_int_to_str(ottelu.vuoropari_nro)
                         self.vaihda_lyontivuoro(ottelu)
 
                 if params['action'] == 'vaihda_lyontivuoro':

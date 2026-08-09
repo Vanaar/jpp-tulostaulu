@@ -15,31 +15,51 @@ Välimuistin elinajat tulevat config.py:stä (ks. config.example.py).
 """
 
 from threading import RLock
-from app.functions import debug_message
-from config import Config
+
+from app.asetukset import asetus
+from app.loki import (
+    DEBUG_MESSAGE_LEVEL_ERROR,
+    DEBUG_MESSAGE_LEVEL_INFO,
+    DEBUG_MESSAGE_LEVEL_WARN,
+    debug_message,
+)
 
 import requests
 import time
-import constants
 
 
-API_BASE_URL = getattr(
-    Config, "PESISTULOKSET_API_URL", "https://api.pesistulokset.fi/api/v1/public"
-)
+# Asetukset luetaan kutsuhetkellä, ei importissa: näin testit ja työkalut
+# voivat vaihtaa esimerkiksi välimuistin elinajan ilman moduulin uudelleen-
+# latausta.
 
-# Kuinka kauan käynnissä olevan ottelun live-tulos on tuoretta (sekuntia)
-LIVE_TTL = getattr(Config, "PESISTULOKSET_LIVE_TTL", 10)
+def _api_url():
+    return asetus(
+        "PESISTULOKSET_API_URL", "https://api.pesistulokset.fi/api/v1/public"
+    )
 
-# Päättyneen ottelun tulos ei enää muutu -> haetaan harvoin
-FINISHED_TTL = getattr(Config, "PESISTULOKSET_FINISHED_TTL", 60)
 
-# Ottelun perustiedot (joukkueet, sarja, kentät) muuttuvat harvoin
-MATCH_TTL = getattr(Config, "PESISTULOKSET_MATCH_TTL", 300)
+def _live_ttl():
+    """Käynnissä olevan ottelun live-tuloksen tuoreusaika (sekuntia)."""
+    return asetus("PESISTULOKSET_LIVE_TTL", 10)
 
-# Kuinka kauan vanhaa dataa tarjoillaan, jos API ei vastaa (sekuntia)
-STALE_TTL = getattr(Config, "PESISTULOKSET_STALE_TTL", 300)
 
-REQUEST_TIMEOUT = getattr(Config, "PESISTULOKSET_TIMEOUT", 5)
+def _finished_ttl():
+    """Päättyneen ottelun tulos ei enää muutu -> haetaan harvoin."""
+    return asetus("PESISTULOKSET_FINISHED_TTL", 60)
+
+
+def _match_ttl():
+    """Ottelun perustiedot (joukkueet, sarja, kenttä) muuttuvat harvoin."""
+    return asetus("PESISTULOKSET_MATCH_TTL", 300)
+
+
+def _stale_ttl():
+    """Kuinka kauan vanhaa dataa tarjoillaan, jos API ei vastaa."""
+    return asetus("PESISTULOKSET_STALE_TTL", 300)
+
+
+def _timeout():
+    return asetus("PESISTULOKSET_TIMEOUT", 5)
 
 
 class ApiVirhe(Exception):
@@ -77,6 +97,12 @@ class _Valimuisti:
             return arvo
         return None
 
+    def viimeisin(self, avain):
+        """Viimeksi tallennettu arvo ikään katsomatta, tai None."""
+        with self._lukko:
+            merkinta = self._data.get(avain)
+        return merkinta[0] if merkinta else None
+
     def aseta(self, avain, arvo):
         with self._lukko:
             self._data[avain] = (arvo, time.monotonic())
@@ -103,7 +129,7 @@ def _hakulukko(avain):
 
 
 def _api_avain():
-    avain = getattr(Config, "PESISTULOKSET_API_KEY", None)
+    avain = asetus("PESISTULOKSET_API_KEY", None)
     if not avain:
         raise ApiVirhe(
             "PESISTULOKSET_API_KEY puuttuu config.py:stä. "
@@ -114,14 +140,12 @@ def _api_avain():
 
 def _kutsu(polku, ottelunumero):
     """Tekee varsinaisen HTTP-kutsun ja palauttaa vastauksen sanakirjana."""
-    url = f"{API_BASE_URL}/{polku}"
+    url = f"{_api_url()}/{polku}"
     params = {"id": ottelunumero, "apikey": _api_avain()}
 
-    debug_message(
-        f"API-kutsu: {url}?id={ottelunumero}", constants.DEBUG_MESSAGE_LEVEL_INFO
-    )
+    debug_message(f"API-kutsu: {url}?id={ottelunumero}", DEBUG_MESSAGE_LEVEL_INFO)
 
-    vastaus = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+    vastaus = requests.get(url, params=params, timeout=_timeout())
 
     if vastaus.status_code == 404:
         return None
@@ -152,13 +176,13 @@ def _hae_valimuistista(polku, ottelunumero, ttl):
         except Exception as e:
             debug_message(
                 f"API-kutsu epäonnistui ({polku}, {ottelunumero}): {e}",
-                constants.DEBUG_MESSAGE_LEVEL_ERROR,
+                DEBUG_MESSAGE_LEVEL_ERROR,
             )
-            vanha = _valimuisti.hae_vanhentunut(avain, STALE_TTL)
+            vanha = _valimuisti.hae_vanhentunut(avain, _stale_ttl())
             if vanha is not None:
                 debug_message(
                     "Tarjoillaan vanhentunutta välimuistidataa",
-                    constants.DEBUG_MESSAGE_LEVEL_WARN,
+                    DEBUG_MESSAGE_LEVEL_WARN,
                 )
                 return vanha
             raise ApiVirhe(f"Pesistulokset-API ei vastaa: {e}") from e
@@ -172,7 +196,7 @@ def hae_ottelu(ottelunumero):
 
     Palauttaa dictin tai None, jos ottelua ei ole olemassa.
     """
-    data = _hae_valimuistista("match", ottelunumero, MATCH_TTL)
+    data = _hae_valimuistista("match", ottelunumero, _match_ttl())
     if not data or not data.get("id"):
         return None
     return data
@@ -184,14 +208,15 @@ def hae_live_tulos(ottelunumero):
     Palauttaa result-osan dictinä tai None, jos ottelu ei ole vielä alkanut
     (API palauttaa tällöin {"result": null}).
     """
-    # Ensimmäinen kevyt kurkistus: onko ottelu jo päättynyt? Jos on, riittää
-    # harvempi päivitystahti.
-    avain = f"match-live-result:{ottelunumero}"
-    edellinen, _ = _valimuisti.hae(avain, 0)
-    ttl = LIVE_TTL
-    if edellinen and isinstance(edellinen.get("result"), dict):
-        if edellinen["result"].get("finished"):
-            ttl = FINISHED_TTL
+    # Kevyt kurkistus välimuistiin: jos ottelu on jo päättynyt, tulos ei enää
+    # muutu ja riittää harvempi päivitystahti.
+    edellinen = _valimuisti.viimeisin(f"match-live-result:{ottelunumero}")
+    paattynyt = (
+        isinstance(edellinen, dict)
+        and isinstance(edellinen.get("result"), dict)
+        and edellinen["result"].get("finished")
+    )
+    ttl = _finished_ttl() if paattynyt else _live_ttl()
 
     data = _hae_valimuistista("match-live-result", ottelunumero, ttl)
     if not data:
