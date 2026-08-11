@@ -7,8 +7,12 @@
       joten sille rakennetaan tässä kiinteät neljä jaksosaraketta kuten ennen.
 
     Jos lisäät sarakkeisiin kentän, muista molemmat haarat.
+
+    Haara valitaan sen mukaan onko kenttää olemassa, EI sen pituudesta:
+    tyhjä lista tarkoittaisi silloin jaksopelin sarakkeita myös vuoropari-
+    pelille. LiveOttelun sarakelista ei ole koskaan tyhjä.
 -#}
-{% if ottelu.sarakkeet is defined and ottelu.sarakkeet %}
+{% if ottelu.sarakkeet is defined %}
     {% set sarakkeet = ottelu.sarakkeet %}
     {% set paapisteet_koti = ottelu.paapisteet_koti %}
     {% set paapisteet_vieras = ottelu.paapisteet_vieras %}

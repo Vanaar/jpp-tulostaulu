@@ -52,6 +52,12 @@ JAKSOJA = 4
 # Jaksosarakkeiden otsikot järjestyksessä. Ylimenevät saraketta numeroidaan.
 JAKSOJEN_OTSIKOT = ("1", "2", "S", "K")
 
+# Montako vuoroparisaraketta vuoroparipelissä on vähintään. Todellinen määrä
+# luetaan runs-taulukosta, mutta kirjaamisen alussa se voi olla tyhjä, eikä
+# taulua saa silloin piirtää jaksopelin sarakkeilla. Kahdella mennään, koska
+# se on ainoa todennettu muoto (ottelu 146447, junnusuper).
+VUOROPAREJA = 2
+
 
 def _jakson_otsikko(indeksi):
     if indeksi < len(JAKSOJEN_OTSIKOT):
@@ -88,7 +94,13 @@ class LiveOttelu:
         # vuoroparipelissä vuoroparit. Manuaalitaulun Otteludata-mallissa tätä
         # kenttää ei ole, jolloin template rakentaa kiinteät neljä jaksoa.
         self.on_jaksopeli = True
-        self.sarakkeet = []
+        # Oletusmuoto on jaksopelin tyhjä taulu. Näin peruttu ja alkamaton
+        # ottelu piirtyvät kuten ennenkin, eikä lista ole koskaan tyhjä:
+        # template erottaa datamallit sarakkeiden olemassaolosta, ei
+        # pituudesta.
+        self.sarakkeet = [
+            _sarake(_jakson_otsikko(i), None, None) for i in range(JAKSOJA)
+        ]
         # Lihavoidun sarakkeen luvut: jaksopelissä jaksovoitot, vuoropari-
         # pelissä juoksut yhteensä.
         self.paapisteet_koti = None
@@ -183,27 +195,33 @@ def _jaksosarakkeet(ottelu, juoksut, nykyinen_jakso_idx):
     return sarakkeet
 
 
-def _vuoroparisarakkeet(ottelu, juoksut, nykyinen_vuoropari_idx):
+def _vuoroparisarakkeet(ottelu, juoksut, nykyinen_vuoropari_idx, vuoro_kaynnissa):
     """Vuoroparipelin sarakkeet: yksi sarake per vuoropari.
 
     Jaksoja ei ole, joten runs-taulukossa on vain yksi alkio ja sarakkeiden
     määrä luetaan sen pituudesta. `details.inning_count` ei kelpaa tähän:
     ottelussa 146447 se on 4, vaikka vuoropareja pelattiin kaksi.
 
-    Pelaamaton vuoropari on null ja jää tyhjäksi samalla tavalla kuin
-    pelaamaton jakso jaksopelissä.
+    Pelaamaton vuoropari jää tyhjäksi, mutta menossa oleva näytetään nollana
+    heti kun se alkaa. Muuten sisävuoron korostus osuisi tyhjään soluun siihen
+    asti kunnes ensimmäinen juoksu kirjataan. Jaksopelissä sama tehdään
+    jaksotasolla `_jaksosarakkeet`issa.
     """
     jakso = (juoksut[0] if juoksut else None) or {}
     koti_juoksut = jakso.get("home") or []
     vieras_juoksut = jakso.get("away") or []
 
     sarakkeet = []
-    for i in range(max(len(koti_juoksut), len(vieras_juoksut))):
+    for i in range(max(VUOROPAREJA, len(koti_juoksut), len(vieras_juoksut))):
         koti = koti_juoksut[i] if i < len(koti_juoksut) else None
         vieras = vieras_juoksut[i] if i < len(vieras_juoksut) else None
-        sarakkeet.append(
-            _sarake(str(i + 1), koti, vieras, i == nykyinen_vuoropari_idx)
-        )
+
+        aktiivinen = i == nykyinen_vuoropari_idx
+        if vuoro_kaynnissa and aktiivinen:
+            koti = 0 if koti is None else koti
+            vieras = 0 if vieras is None else vieras
+
+        sarakkeet.append(_sarake(str(i + 1), koti, vieras, aktiivinen))
 
     # Jakson summa säilytetään, jotta näkymämalli vastaa yhä Otteludataa
     ottelu.aseta_jakson_juoksut(0, _summaa(koti_juoksut), _summaa(vieras_juoksut))
@@ -330,6 +348,11 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
         and not _jakso_alkanut(tulos.get("runs") or [], nykyinen_jakso_idx)
     )
 
+    # Onko jollakulla vuoro juuri nyt. Päättyneessä ottelussa ja jaksotauolla
+    # ei ole. Tarvitaan jo sarakkeita rakennettaessa, jotta menossa oleva
+    # vuoropari osataan erottaa pelaamattomasta.
+    vuoro_kaynnissa = not paattynyt and not jaksotauko
+
     # --- Pistesarakkeet --------------------------------------------------
     # Taulun muoto luetaan datasta: jaksopelissä sarakkeina ovat jaksot,
     # muuten yksittäiset vuoroparit.
@@ -348,7 +371,7 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
         # juoksut yhteensä. Se on tässä pelimuodossa ottelun lopputulos.
         ottelu.otteluinfo = "Vuoroparipeli"
         ottelu.sarakkeet = _vuoroparisarakkeet(
-            ottelu, juoksut, nykyinen_vuoropari_idx
+            ottelu, juoksut, nykyinen_vuoropari_idx, vuoro_kaynnissa
         )
         ottelu.paapisteet_koti = _summaa([s["koti"] for s in ottelu.sarakkeet])
         ottelu.paapisteet_vieras = _summaa([s["vieras"] for s in ottelu.sarakkeet])
@@ -356,7 +379,6 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
     # --- Palot ----------------------------------------------------------
     # outCount jää viimeiseen tilaansa, kun vuoro ei ole käynnissä. Päättyneessä
     # ottelussa ja jaksotauolla paloja ei siis näytetä.
-    vuoro_kaynnissa = not paattynyt and not jaksotauko
     ottelu.palot = parsi_x_palot(tulos.get("outCount") or 0) if vuoro_kaynnissa else ""
 
     # --- Lyömässä oleva joukkue -----------------------------------------

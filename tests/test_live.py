@@ -253,6 +253,12 @@ class TestAlkamatonOttelu(unittest.TestCase):
     def test_otteluinfo(self):
         self.assertEqual(self.ottelu.otteluinfo, "Ottelu ei ole alkanut")
 
+    def test_sarakkeina_tyhja_jaksopeli(self):
+        # Pelimuotoa ei vielä tiedetä, joten taulu piirtyy kuten ennenkin
+        otsikot = [s["otsikko"] for s in self.ottelu.sarakkeet]
+        self.assertEqual(otsikot, ["1", "2", "S", "K"])
+        self.assertTrue(all(s["koti"] is None for s in self.ottelu.sarakkeet))
+
     def test_nimet_haetaan_silti(self):
         self.assertEqual(self.ottelu.kotijoukkue, "Fera, Rauma")
         self.assertEqual(self.ottelu.vierasjoukkue, "Jyväskylän Kirittäret")
@@ -582,6 +588,41 @@ class TestVuoroparipeli(unittest.TestCase):
         self.assertIsNone(self.ottelu.jakso_3_koti_juoksut)
         self.assertIsNone(self.ottelu.jakso_4_koti_juoksut)
 
+    def test_tyhja_runs_ei_pudota_jaksopelin_sarakkeisiin(self):
+        # Kirjaus ei ole vielä alkanut: sarakkeiden on silti oltava
+        # vuoropareja, ei jaksoja. Tyhjä lista pudottaisi templaten
+        # manuaalihaaraan, joka piirtäisi otsikot 1/2/S/K.
+        for runs in ([], [{"home": [], "away": []}]):
+            with self.subTest(runs=runs):
+                tulos = dict(TULOS_146447)
+                tulos["finished"] = False
+                tulos["runs"] = runs
+                ottelu = rakenna_ottelu(146447, OTTELU_146447, tulos)
+                otsikot = [s["otsikko"] for s in ottelu.sarakkeet]
+                self.assertEqual(otsikot, ["1", "2"])
+
+    def test_menossa_oleva_vuoropari_on_nolla_eika_tyhja(self):
+        # Korostettu solu ei saa jäädä tyhjäksi ennen ensimmäistä juoksua
+        tulos = dict(TULOS_146447)
+        tulos.update({
+            "finished": False,
+            "runs": [{"home": [8, None], "away": [7, 3]}],
+            "currentInning": 1,
+            "batTurn": 0,
+            "batTurnTeamKey": "home",
+        })
+        ottelu = rakenna_ottelu(146447, OTTELU_146447, tulos)
+        self.assertEqual([s["koti"] for s in ottelu.sarakkeet], [8, 0])
+        self.assertEqual([s["vieras"] for s in ottelu.sarakkeet], [7, 3])
+
+    def test_pelaamaton_vuoropari_jaa_tyhjaksi(self):
+        # Päättyneessä ottelussa kukaan ei ole vuorossa, joten viimeistä
+        # lyömätöntä vuoroparia ei saa näyttää nollana
+        tulos = dict(TULOS_146447)
+        tulos["runs"] = [{"home": [8, None], "away": [7, 7]}]
+        ottelu = rakenna_ottelu(146447, OTTELU_146447, tulos)
+        self.assertEqual([s["koti"] for s in ottelu.sarakkeet], [8, None])
+
     def test_kaynnissa_olevassa_naytetaan_vain_vuoropari(self):
         tulos = dict(TULOS_146447)
         tulos["finished"] = False
@@ -593,8 +634,9 @@ class TestVuoroparipeli(unittest.TestCase):
         # Ei jaksotekstiä, koska jaksoja ei ole
         self.assertEqual(ottelu.jakso_txt, "")
         self.assertEqual(ottelu.vuoropari_txt, "2. aloittava")
-        # Pelaamaton vuoropari jää tyhjäksi
-        self.assertEqual([s["koti"] for s in ottelu.sarakkeet], [8, None])
+        # Menossa oleva vuoropari on nolla, ei tyhjä: ks.
+        # test_menossa_oleva_vuoropari_on_nolla_eika_tyhja
+        self.assertEqual([s["koti"] for s in ottelu.sarakkeet], [8, 0])
         self.assertTrue(ottelu.sarakkeet[1]["aktiivinen"])
         self.assertFalse(ottelu.sarakkeet[0]["aktiivinen"])
 
