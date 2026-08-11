@@ -24,7 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from test_live import (  # noqa: E402
     OTTELU_129199,
     OTTELU_129209,
+    OTTELU_146447,
     TULOS_129209,
+    TULOS_146447,
     kaynnissa_oleva_tulos,
 )
 
@@ -131,6 +133,15 @@ class ReittiTesti(unittest.TestCase):
         vastaus = self.client.get("/129209?style=siipe")
         self.assertIn("scoreboard_siipe.css", vastaus.get_data(as_text=True))
 
+    def test_kokoparametri(self):
+        sisalto = self.client.get("/129209?koko=2").get_data(as_text=True)
+        self.assertIn("zoom: 2", sisalto)
+
+    def test_oletuskoossa_ei_zoomia(self):
+        for polku in ("/129209", "/129209?koko=1", "/129209?koko=roska"):
+            with self.subTest(polku=polku):
+                self.assertNotIn("zoom", self.client.get(polku).get_data(as_text=True))
+
     def test_sisavuoro_korostuu_kaynnissa_olevassa_ottelussa(self):
         from app import pesistulokset_api
 
@@ -166,6 +177,48 @@ class ReittiTesti(unittest.TestCase):
 
         # 20 selainpyyntöä -> korkeintaan yksi match- ja yksi live-result-kutsu
         self.assertLessEqual(kutsut["n"], 2)
+
+
+class VuoroparipeliTesti(unittest.TestCase):
+    """Taulun muoto tulee datasta: vuoroparipelissä ei piirretä jaksoja."""
+
+    def setUp(self):
+        from app import pesistulokset_api, routes
+
+        pesistulokset_api.tyhjenna_valimuisti()
+        routes._tyhjenna_reititys()
+
+        patcher = mock.patch(
+            "app.pesistulokset_api.requests.get",
+            side_effect=tee_vastaaja(
+                {146447: OTTELU_146447}, {146447: TULOS_146447}
+            ),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        app = luo_sovellus()
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+
+    def test_sarakkeina_vuoroparit(self):
+        sisalto = self.client.get("/146447/tulostaulu").get_data(as_text=True)
+
+        # Kaksi vuoroparisaraketta, ei S- tai K-saraketta
+        self.assertIn('class="otsikko">1<', sisalto)
+        self.assertIn('class="otsikko">2<', sisalto)
+        self.assertNotIn('class="otsikko">S<', sisalto)
+        self.assertNotIn('class="otsikko">K<', sisalto)
+
+    def test_juoksut_ja_lopputulos_naytetaan(self):
+        sisalto = self.client.get("/146447/tulostaulu").get_data(as_text=True)
+
+        self.assertIn("Kauhajoen Karhu", sisalto)
+        # Vuoroparit 8-7 ja 9-7, yhteensä 17-14
+        self.assertIn('class="total-points">17<', sisalto)
+        self.assertIn('class="total-points">14<', sisalto)
+        self.assertIn("Ottelu on päättynyt", sisalto)
+        self.assertIn("Vuoroparipeli", sisalto)
 
 
 if __name__ == "__main__":

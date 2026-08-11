@@ -2,7 +2,13 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    {# Ilman tätä mobiiliselain ja osa webview-toteutuksista olettaa 980 px
+       leveän sivun ja pienentää taulun luettavuuden rajoille. Samalla
+       kapean upotuksen media-kysely alkaa ylipäätään osua. #}
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Junnut Pelaa Pesistä -tulostaulu</title>
+    {# Rakenne ensin, värit päälle. Tyylitiedosto asettaa vain muuttujat. #}
+    <link rel='stylesheet' href='/static/css/scoreboard_base.css'>
     {% if style is not none %}
         <link rel='stylesheet' href='/static/css/scoreboard_{{style}}.css'>
     {% else %}
@@ -10,7 +16,9 @@
     {% endif %}
 </head>
 <body>
-<div id="tulostaulu"></div>
+{# ?koko=<kerroin> skaalaa taulun zoomilla eli asettelutasolla, jolloin se
+   pysyy terävänä. Oletuskoossa tyyliä ei kirjoiteta lainkaan. #}
+<div id="tulostaulu"{% if koko and koko != 1.0 %} style="zoom: {{ koko }}"{% endif %}></div>
 
 {% if debug == "on" %}
     <div id="pt_loader">Debug-moodi päällä</div>

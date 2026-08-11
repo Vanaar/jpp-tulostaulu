@@ -54,6 +54,14 @@ saa joko SQLAlchemy-olion (`app/models.py: Otteludata`) tai `LiveOttelu`-olion
 kenttänimiltään kantamallia. **Jos lisäät templateen kentän, lisää se
 molempiin** — muuten toinen taulu hajoaa hiljaa.
 
+**Taulun sarakkeet tulevat datasta, eivät vakioista.** `LiveOttelu.sarakkeet`
+on lista dictejä (`otsikko`, `koti`, `vieras`, `aktiivinen`), ja template
+piirtää täsmälleen ne. Lihavoituun sarakkeeseen tulee `paapisteet_koti` /
+`paapisteet_vieras`. Manuaalitaulun `Otteludata` ei tunne näitä kenttiä, joten
+templaten alussa on sille haara, joka rakentaa vanhat neljä jaksosaraketta
+`jakso_N_*_juoksut`-kentistä. `aktiivinen` kertoo vain missä sarakkeessa
+pelataan; sisävuoron korostus vaatii lisäksi nimivertailun (ks. alla).
+
 **Sisävuoron korostus perustuu joukkueen nimen vertailuun**
 (`ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue`). Se on peräisin
 manuaalitaulusta. Jos joukkueilla olisi identtinen näyttönimi, korostus menisi
@@ -64,8 +72,30 @@ samalla.
 `parsi_x_palot()` tuottaa vain `X`- ja `<br/>`-merkkejä. Pidä se sellaisena.
 
 **Widgetin URL-sopimus on julkinen eikä sitä saa muuttaa:** `/<ottelunumero>`,
-valinnaiset `?style=<default|siipe>` ja `?debug=on`. Tauluja on upotettu
-ulkopuolisille sivuille.
+valinnaiset `?style=<default|siipe>`, `?debug=on` ja `?koko=<kerroin>`.
+Tauluja on upotettu ulkopuolisille sivuille. Parametreja saa lisätä
+valinnaisina, mutta olemassa olevia ei saa poistaa eikä niiden merkitystä
+muuttaa.
+
+**`?koko=` on tarkoitettu striimigrafiikkaan.** Kerroin annetaan
+`#tulostaulu`-elementille `zoom`-tyylinä, jolloin taulu skaalautuu
+asettelutasolla ja pysyy terävänä; striimiohjelman lähteen venyttäminen sen
+sijaan skaalaa valmiin bittikartan. Arvo tulkitaan `app/functions.py:
+parsi_koko`issa ja rajataan välille 0.5-5; roska ja puuttuva arvo palauttavat
+1.0, jolloin `zoom`-tyyliä ei kirjoiteta lainkaan. Zoom on kehyssivulla eikä
+taulufragmentissa, joten se säilyy 5 sekunnin päivitysten yli.
+
+**`ottelu.html`:ssä on oltava viewport-meta.** Ilman sitä mobiiliselain ja osa
+webview-toteutuksista olettaa sivun 980 px levyiseksi ja skaalaa taulun
+murto-osaan koostaan — samalla kapean upotuksen media-kysely ei osu koskaan.
+
+**Tyylit on jaettu rakenteeseen ja väreihin.** `scoreboard_base.css` sisältää
+mitat, typografian ja muodot; `scoreboard_default.css` ja
+`scoreboard_siipe.css` asettavat pelkät `--pt-*`-värimuuttujat. `ottelu.html`
+lataa ensin basen ja sitten tyylin. Uusi väritys = uusi muuttujatiedosto.
+Base-tiedoston säännöt on kirjoitettu `table.scoreboard`-alkuisina, jotta
+spesifisyys pysyy samana ja lähdejärjestys ratkaisee — muuten yleinen
+solusääntö jyrää yksittäisten solujen värit.
 
 ### pesistulokset-API:n kummallisuudet
 
@@ -123,8 +153,21 @@ käytä niitä totuutena, älä arvaa kenttien muotoa.
   solu jää tyhjäksi.
 - **Alkamaton ottelu palauttaa `{"result": null}`.** Joukkueiden nimet saa silti
   `/match`-kutsulla.
-- **`isPeriodMatch: false` tarkoittaa junioriottelua**: ei jaksovoittoja, vain
-  yksi jaksosarake, otteluinfoksi "Junioriottelu".
+- **`isPeriodMatch: false` tarkoittaa vuoroparipeliä.** Ei jaksoja eikä
+  jaksovoittoja: `runs`issa on vain yksi alkio, jonka sisällä ovat pelatut
+  vuoroparit. Taulu piirretään silloin vuoropari kerrallaan ja lihavoituun
+  sarakkeeseen tulee juoksut yhteensä. Otteluinfoksi tulee "Vuoroparipeli".
+  **Termi "junioriottelu" oli väärä ja on poistettu**: kaudella 2026 juniorit
+  pelaavat jaksopelejä aivan pienimpiä ikäluokkia lukuun ottamatta, ja
+  esimerkiksi Nuorten Ykköspesiksen ottelussa 131618 `isPeriodMatch` on `true`.
+  Todennettu 11.8.2026 ottelulla 146447 (junnusuper, F-ikäiset): yksi jakso,
+  kaksi vuoroparia, 17-14. Testidatana `tests/test_live.py`:ssä.
+- **Vuoroparien määrää ei saa lukea `details.inning_count`ista.** Se on
+  ottelussa 146447 `4`, vaikka vuoropareja pelattiin kaksi. Ainoa luotettava
+  lähde on `runs`-taulukon muoto. Muita saman ottelun tunnusmerkkejä ovat
+  `meta.playing_type: 1` (jaksopeleissä 2), `meta.simple_score_keeping: true`
+  ja `series.level: "Junnusuper"`, mutta `isPeriodMatch` on näistä ainoa
+  yksiselitteinen — sarjataso ei kerro pelimuotoa.
 - **Päättyneessä ottelussa `batTurn` ja `outCount` jäävät viimeiseen tilaansa.**
   Tuotepäätös: koko taulu näytetään silti normaalisti, vain tilarivillä lukee
   "Ottelu on päättynyt".
@@ -164,6 +207,8 @@ manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
 | `app/functions.py` | Jaettuja apufunktioita molemmille tauluille |
 | `app/templates/tulostaulu.html` | Itse taulu, haetaan selaimeen 5 s välein |
 | `app/templates/ottelu.html` | Widgetin kehyssivu + pollaus |
+| `static/css/scoreboard_base.css` | Taulun rakenne, mitat ja muodot |
+| `static/css/scoreboard_default.css`, `_siipe.css` | Pelkät värimuuttujat |
 | `tools/esikatselu.py` | Ei osa sovellusta; renderöi taulun eri tiloissa |
 
 ## Tiedossa olevat avoimet kohdat
@@ -177,10 +222,22 @@ manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
   kotiutuskisaan). Molemmat ovat testidatana `tests/test_live.py`:ssä.
   Päättyneet ottelut on nähty; supervuoroa tai kotiutuskisaa **käynnissä**
   ei vieläkään, mutta logiikka on sama ja lukittu testeillä.
+- ~~`isPeriodMatch: false` renderöityi jaksopelin sarakkeilla~~ **Korjattu
+  11.8.2026.** Taulun muoto tulee nyt `runs`-taulukosta: jaksopelissä
+  sarakkeina ovat jaksot (vähintään 1, 2, S, K) ja vuoroparipelissä
+  yksittäiset vuoroparit. Todennettu ottelulla 146447.
 - **`details.inning_count` ja `meta.super_inning_in_use` ovat käyttämättä.**
-  Säännöt sallivat juniori- ja turnausotteluissa 3 tai 2 vuoroparin jaksot,
-  ja Superpesiksen runkosarjassa supervuoroa ei pelata lainkaan. Koodi
-  olettaa yhä neljä vuoroparia ja S-sarakkeen aina.
+  Säännöt sallivat juniori- ja turnausotteluissa 3 tai 2 vuoroparin jaksot.
+  Jaksopelissä koodi olettaa yhä vähintään neljä saraketta; jos `runs`issa on
+  enemmän jaksoja, ne piirtyvät, mutta vähempää ei näytetä. `inning_count` ei
+  kelpaa lähteeksi (ks. yllä ottelu 146447).
+  **S-saraketta ei pidä piilottaa `super_inning_in_use`n
+  perusteella** (päätös 11.8.2026): pudotuspeleissä supervuoro on käytössä,
+  eikä API kerro suoraan onko ottelu pudotuspeli — `meta.playing_type` oli 2
+  kaikissa tarkistetuissa otteluissa. `super_inning_in_use` on kirjurin
+  käsin asettama ja vaihtelee otteluittain ilman selvää sääntöä (129010 ja
+  130446 `false`, 131618 `true`), joten siihen ei voi luottaa. Tyhjä
+  S-sarake on pienempi paha kuin puuttuva.
 - **`/online/<id>/events` on dokumentoimaton mutta hyödyllinen.** Se antaa
   ottelun tapahtumat ja ylätasolla luotettavan nykytilan (`period`, `inning`,
   `bat_turn`, `team`). Hyvä ristiintarkistukseen, mutta älä ota tuotannon

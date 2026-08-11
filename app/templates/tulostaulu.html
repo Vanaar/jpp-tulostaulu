@@ -1,55 +1,86 @@
-    <table class='scoreboard' border='1' cellspacing='0' cellpadding='5' style='border-collapse: collapse; font-family: Arial, sans-serif;'>
+{#-
+    Yksi template palvelee kahta datamallia (ks. CLAUDE.md):
+
+    - LiveOttelu (app/live.py) antaa sarakkeet valmiina. Jaksopelissä ne ovat
+      jaksot (1, 2, S, K) ja vuoroparipelissä yksittäiset vuoroparit.
+    - Manuaalitaulun Otteludata (app/models.py) ei tunne sarakkeita lainkaan,
+      joten sille rakennetaan tässä kiinteät neljä jaksosaraketta kuten ennen.
+
+    Jos lisäät sarakkeisiin kentän, muista molemmat haarat.
+-#}
+{% if ottelu.sarakkeet is defined and ottelu.sarakkeet %}
+    {% set sarakkeet = ottelu.sarakkeet %}
+    {% set paapisteet_koti = ottelu.paapisteet_koti %}
+    {% set paapisteet_vieras = ottelu.paapisteet_vieras %}
+{% else %}
+    {% set sarakkeet = [
+        {'otsikko': '1', 'koti': ottelu.jakso_1_koti_juoksut,
+         'vieras': ottelu.jakso_1_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 1},
+        {'otsikko': '2', 'koti': ottelu.jakso_2_koti_juoksut,
+         'vieras': ottelu.jakso_2_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 2},
+        {'otsikko': 'S', 'koti': ottelu.jakso_3_koti_juoksut,
+         'vieras': ottelu.jakso_3_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 3},
+        {'otsikko': 'K', 'koti': ottelu.jakso_4_koti_juoksut,
+         'vieras': ottelu.jakso_4_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 4}
+    ] %}
+    {% set paapisteet_koti = ottelu.koti_jaksovoitot %}
+    {% set paapisteet_vieras = ottelu.vieras_jaksovoitot %}
+{% endif %}
+{#- Joukkue- ja päärivisarake mukaan lukien. Palosarake ei kuulu tauluun. -#}
+{% set leveys = sarakkeet | length + 2 %}
+    <table class="scoreboard">
         <tbody>
-            <tr class='top'>
-                <td colspan='2' class='invisible'></td>
-                <td>1</td>
-                <td>2</td>
-                <td>S</td>
-                <td>K</td>
+            <tr class="top">
+                <td colspan="2" class="invisible"></td>
+                {%- for sarake in sarakkeet %}
+                <td class="otsikko">{{ sarake.otsikko }}</td>
+                {%- endfor %}
             </tr>
             <tr class="tulosrivi">
-                <td class='joukkue'>{{ottelu.kotijoukkue}}</td>
-                <td class='total-points'>{{ ottelu.koti_jaksovoitot if ottelu.koti_jaksovoitot is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_1_koti_juoksut if ottelu.jakso_1_koti_juoksut is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_2_koti_juoksut if ottelu.jakso_2_koti_juoksut is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_3_koti_juoksut if ottelu.jakso_3_koti_juoksut is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_4_koti_juoksut if ottelu.jakso_4_koti_juoksut is not none else '' }}</td>
-                {% if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}
-                    <td class='palot'>{{ottelu.palot|safe}}</td>
-                {% endif %}
+                <td class="joukkue">{{ottelu.kotijoukkue}}</td>
+                <td class="total-points">{{ paapisteet_koti if paapisteet_koti is not none else '' }}</td>
+                {%- for sarake in sarakkeet %}
+                <td class="tulos{% if sarake.aktiivinen and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ sarake.koti if sarake.koti is not none else '' }}</td>
+                {%- endfor %}
+                {%- if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}
+                <td class="palot">{{ottelu.palot|safe}}</td>
+                {%- endif %}
             </tr>
             <tr class="tulosrivi">
-                <td class='joukkue'>{{ottelu.vierasjoukkue}}</td>
-                <td class='total-points'>{{ ottelu.vieras_jaksovoitot if ottelu.vieras_jaksovoitot is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 1 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_1_vieras_juoksut if ottelu.jakso_1_vieras_juoksut is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 2 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_2_vieras_juoksut if ottelu.jakso_2_vieras_juoksut is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 3 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_3_vieras_juoksut if ottelu.jakso_3_vieras_juoksut is not none else '' }}</td>
-                <td class="tulos{% if ottelu.jakso_nro == 4 and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ ottelu.jakso_4_vieras_juoksut if ottelu.jakso_4_vieras_juoksut is not none else '' }}</td>
-                {% if ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}
-                    <td class='palot'>{{ottelu.palot|safe}}</td>
-                {% endif %}
+                <td class="joukkue">{{ottelu.vierasjoukkue}}</td>
+                <td class="total-points">{{ paapisteet_vieras if paapisteet_vieras is not none else '' }}</td>
+                {%- for sarake in sarakkeet %}
+                <td class="tulos{% if sarake.aktiivinen and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ sarake.vieras if sarake.vieras is not none else '' }}</td>
+                {%- endfor %}
+                {%- if ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}
+                <td class="palot">{{ottelu.palot|safe}}</td>
+                {%- endif %}
             </tr>
-            <tr>
-                <td class='current_period' colspan="4">
-                    {%- if ottelu.jakso_txt -%}
-                        {{ottelu.jakso_txt}}{% if ottelu.vuoropari_txt %} / {{ottelu.vuoropari_txt}}{% endif %}
+            <tr class="tilarivi">
+                <td class="current_period" colspan="{{ leveys - 2 }}">
+                    {%- if ottelu.jakso_txt or ottelu.vuoropari_txt -%}
+                        {{ottelu.jakso_txt}}
+                        {%- if ottelu.jakso_txt and ottelu.vuoropari_txt %} / {% endif -%}
+                        {{ottelu.vuoropari_txt}}
                     {%- else -%}
                         {{ottelu.otteluinfo}}
                     {%- endif -%}
                 </td>
-                <td class='current_period' colspan="2">{% if ottelu.jakso_txt %}{{ottelu.otteluinfo}}{% endif %}</td>
+                <td class="current_period otteluinfo" colspan="2">
+                    {%- if ottelu.jakso_txt or ottelu.vuoropari_txt %}{{ottelu.otteluinfo}}{% endif -%}
+                </td>
             </tr>
             <tr>
-                <td class="promo" colspan="6">
+                <td class="promo" colspan="{{ leveys }}">
                     Tulostaulun tarjoaa: <b>Junnut Pelaa Pesistä</b>
                 </td>
             </tr>
             {% if debug == "on" %}
             <tr class="debug">
-                <td colspan="6">
+                <td colspan="{{ leveys }}">
                     Päivitys: {% if pesistulokset %} Pesistulokset-API {% else %} Manuaalinen {% endif %}
                 </td>
             </tr>
-            {% endif %} 
+            {% endif %}
         </tbody>
     </table>

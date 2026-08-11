@@ -13,6 +13,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.functions import parsi_koko  # noqa: E402
 from app.live import (  # noqa: E402
     joukkueen_nimi,
     paattele_lyova_joukkue,
@@ -126,6 +127,42 @@ TULOS_127482 = {
     "batTurnTeamKey": "away",
     "finished": True,
     "isPeriodMatch": True,
+}
+
+
+# Ottelu 146447, junnusuperin sekasarjaa. Oikeaa API-dataa 11.8.2026.
+# Ei jaksopeli: yksi jakso, kaksi vuoroparia, lopputulos 17-14.
+# Huom. details.inning_count on 4, vaikka vuoropareja pelattiin kaksi —
+# runs-taulukon muoto on ainoa luotettava lähde.
+OTTELU_146447 = {
+    "id": 146447,
+    "canceled": False,
+    "started": True,
+    "details": {"inning_count": 4, "draw_of_choice_winner": "away"},
+    "meta": {
+        "first_bat_turns": [19306, None, None, None],
+        "super_inning_in_use": False,
+        "simple_score_keeping": True,
+        "playing_type": 1,
+    },
+    "home": {"id": 19306, "name": "Kauhajoen Karhu", "shorthand": "KaKa"},
+    "away": {
+        "id": 19133,
+        "name": "Seinäjoen Maila-Jussit T18 valkoinen",
+        "shorthand": "SMJ T18 valkoinen",
+    },
+}
+
+TULOS_146447 = {
+    "periods": {"home": 0, "away": 0},
+    "runs": [{"home": [8, 9], "away": [7, 7]}],
+    "outCount": 7,
+    "currentPeriod": -1,
+    "currentInning": 1,
+    "batTurn": 1,
+    "batTurnTeamKey": "away",
+    "finished": True,
+    "isPeriodMatch": False,
 }
 
 
@@ -479,35 +516,87 @@ class TestLyovanJoukkueenPaattely(unittest.TestCase):
         self.assertIsNone(paattele_lyova_joukkue(tulos, OTTELU_129209))
 
 
-class TestJunioriottelu(unittest.TestCase):
+class TestJaksopelinSarakkeet(unittest.TestCase):
+    """Jaksopelissä sarakkeina ovat jaksot ja S/K piirretään aina."""
+
     def setUp(self):
-        ottelu_data = dict(OTTELU_129209)
-        tulos = {
-            "periods": {"home": 0, "away": 0},
-            "runs": [{"home": [2, 1, 0, 3], "away": [1, 0, 2, None]}],
-            "outCount": 1,
-            "currentPeriod": -1,
-            "currentInning": 3,
-            "batTurn": 1,
-            "batTurnTeamKey": "away",
-            "finished": False,
-            "isPeriodMatch": False,
-        }
-        self.ottelu = rakenna_ottelu(99999, ottelu_data, tulos)
+        self.ottelu = rakenna_ottelu(129209, OTTELU_129209, TULOS_129209)
+
+    def test_nelja_saraketta(self):
+        otsikot = [s["otsikko"] for s in self.ottelu.sarakkeet]
+        self.assertEqual(otsikot, ["1", "2", "S", "K"])
+
+    def test_sarakkeet_vastaavat_jaksoja(self):
+        # Jaksot 8-3 ja 6-2, supervuoroa ja kotiutuskisaa ei pelattu
+        koti = [s["koti"] for s in self.ottelu.sarakkeet]
+        vieras = [s["vieras"] for s in self.ottelu.sarakkeet]
+        self.assertEqual(koti, [8, 6, None, None])
+        self.assertEqual(vieras, [3, 2, None, None])
+
+    def test_paapisteet_ovat_jaksovoitot(self):
+        self.assertEqual(self.ottelu.paapisteet_koti, 2)
+        self.assertEqual(self.ottelu.paapisteet_vieras, 0)
+
+    def test_s_sarake_sailyy_vaikka_runs_olisi_lyhyt(self):
+        tulos = dict(TULOS_129209)
+        tulos["runs"] = TULOS_129209["runs"][:2]
+        ottelu = rakenna_ottelu(129209, OTTELU_129209, tulos)
+        otsikot = [s["otsikko"] for s in ottelu.sarakkeet]
+        self.assertEqual(otsikot, ["1", "2", "S", "K"])
+
+
+class TestVuoroparipeli(unittest.TestCase):
+    """isPeriodMatch = false: ei jaksoja, sarakkeina vuoroparit.
+
+    Oikeaa dataa ottelusta 146447 (junnusuper, 17-14 kahdessa vuoroparissa).
+    """
+
+    def setUp(self):
+        self.ottelu = rakenna_ottelu(146447, OTTELU_146447, TULOS_146447)
 
     def test_otteluinfo(self):
-        self.assertEqual(self.ottelu.otteluinfo, "Junioriottelu")
+        self.assertEqual(self.ottelu.otteluinfo, "Vuoroparipeli")
 
     def test_ei_jaksovoittoja(self):
+        self.assertFalse(self.ottelu.on_jaksopeli)
         self.assertIsNone(self.ottelu.koti_jaksovoitot)
         self.assertIsNone(self.ottelu.vieras_jaksovoitot)
 
-    def test_vain_yksi_jaksosarake(self):
-        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 6)
-        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 3)
+    def test_sarakkeina_vuoroparit(self):
+        otsikot = [s["otsikko"] for s in self.ottelu.sarakkeet]
+        koti = [s["koti"] for s in self.ottelu.sarakkeet]
+        vieras = [s["vieras"] for s in self.ottelu.sarakkeet]
+        self.assertEqual(otsikot, ["1", "2"])
+        self.assertEqual(koti, [8, 9])
+        self.assertEqual(vieras, [7, 7])
+
+    def test_paapisteina_juoksut_yhteensa(self):
+        self.assertEqual(self.ottelu.paapisteet_koti, 17)
+        self.assertEqual(self.ottelu.paapisteet_vieras, 14)
+
+    def test_jaksosarakkeita_ei_jaa_roikkumaan(self):
+        # Jakson summa säilyy Otteludata-yhteensopivuuden vuoksi, muut tyhjinä
+        self.assertEqual(self.ottelu.jakso_1_koti_juoksut, 17)
+        self.assertEqual(self.ottelu.jakso_1_vieras_juoksut, 14)
         self.assertIsNone(self.ottelu.jakso_2_koti_juoksut)
         self.assertIsNone(self.ottelu.jakso_3_koti_juoksut)
         self.assertIsNone(self.ottelu.jakso_4_koti_juoksut)
+
+    def test_kaynnissa_olevassa_naytetaan_vain_vuoropari(self):
+        tulos = dict(TULOS_146447)
+        tulos["finished"] = False
+        tulos["runs"] = [{"home": [8, None], "away": [7, None]}]
+        tulos["currentInning"] = 1
+        tulos["batTurn"] = 0
+        ottelu = rakenna_ottelu(146447, OTTELU_146447, tulos)
+
+        # Ei jaksotekstiä, koska jaksoja ei ole
+        self.assertEqual(ottelu.jakso_txt, "")
+        self.assertEqual(ottelu.vuoropari_txt, "2. aloittava")
+        # Pelaamaton vuoropari jää tyhjäksi
+        self.assertEqual([s["koti"] for s in ottelu.sarakkeet], [8, None])
+        self.assertTrue(ottelu.sarakkeet[1]["aktiivinen"])
+        self.assertFalse(ottelu.sarakkeet[0]["aktiivinen"])
 
 
 class TestPeruttuOttelu(unittest.TestCase):
@@ -516,6 +605,28 @@ class TestPeruttuOttelu(unittest.TestCase):
         ottelu_data["canceled"] = True
         ottelu = rakenna_ottelu(129199, ottelu_data, None)
         self.assertEqual(ottelu.otteluinfo, "Ottelu peruttu")
+
+
+class TestParsiKoko(unittest.TestCase):
+    """Widgetin ?koko= on julkinen parametri, joten se saa mitä tahansa."""
+
+    def test_kelvollinen_arvo(self):
+        self.assertEqual(parsi_koko("1.5"), 1.5)
+        self.assertEqual(parsi_koko("2"), 2.0)
+        # Pilkku desimaalierottimena on suomalaiselle luonteva kirjoitusasu
+        self.assertEqual(parsi_koko("1,5"), 1.5)
+
+    def test_puuttuva_tai_roskainen_arvo(self):
+        self.assertEqual(parsi_koko(None), 1.0)
+        self.assertEqual(parsi_koko(""), 1.0)
+        self.assertEqual(parsi_koko("iso"), 1.0)
+        self.assertEqual(parsi_koko("nan"), 1.0)
+        self.assertEqual(parsi_koko("inf"), 1.0)
+
+    def test_rajataan_jarkeviin_lukemiin(self):
+        self.assertEqual(parsi_koko("0.1"), 0.5)
+        self.assertEqual(parsi_koko("-3"), 0.5)
+        self.assertEqual(parsi_koko("500"), 5.0)
 
 
 class TestVuoroparinTeksti(unittest.TestCase):

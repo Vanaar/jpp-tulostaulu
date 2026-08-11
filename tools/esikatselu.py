@@ -5,8 +5,8 @@ tarkistusta varten. Ei osa sovellusta.
     python tools/esikatselu.py > esikatselu.html
 """
 
+import html
 import os
-import re
 import sys
 from unittest import mock
 
@@ -17,7 +17,9 @@ sys.path.insert(0, os.path.join(JUURI, "tests"))
 from test_live import (  # noqa: E402
     OTTELU_129199,
     OTTELU_129209,
+    OTTELU_146447,
     TULOS_129209,
+    TULOS_146447,
     kaynnissa_oleva_tulos,
 )
 from test_reitit import luo_sovellus, tee_vastaaja  # noqa: E402
@@ -43,24 +45,38 @@ def taulu(ottelut, tulokset, polku):
         return _client.get(polku).get_data(as_text=True)
 
 
-def scope(css, valitsin):
-    """Rajaa CSS-säännöt annetun valitsimen alle, jotta molemmat tyylit
-    voidaan näyttää samalla sivulla."""
-    osat = []
-    for saanto in re.findall(r"([^{}]+)\{([^}]*)\}", css):
-        valitsimet = ", ".join(
-            f"{valitsin} {v.strip()}" for v in saanto[0].split(",") if v.strip()
-        )
-        osat.append(f"{valitsimet} {{{saanto[1]}}}")
-    return "\n".join(osat)
+def lue_css(nimi):
+    with open(os.path.join(JUURI, "static/css", nimi), encoding="utf-8") as f:
+        return f.read()
 
 
-JUNIORI_TULOS = {
+def kehys(taulu_html, tyyli_css):
+    """Taulu omaan iframeen, jotta tyylit eivät vuoda esikatselusivulle.
+
+    Aiemmin tyylit rajattiin valitsimella, mutta se ei toimi CSS-muuttujien
+    eikä media-kyselyiden kanssa. Iframe on sekä yksinkertaisempi että
+    lähempänä sitä, miten widget oikeasti upotetaan.
+    """
+    sivu = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        f"<style>{lue_css('scoreboard_base.css')}{tyyli_css}"
+        "html,body{margin:0;padding:14px;background:transparent}</style>"
+        f"</head><body>{taulu_html}</body></html>"
+    )
+    return (
+        f'<iframe class="taulu" srcdoc="{html.escape(sivu, quote=True)}" '
+        'scrolling="no" onload="sovita(this)"></iframe>'
+    )
+
+
+# Käynnissä oleva vuoroparipeli: 2. vuoropari kesken, vieras lyömässä.
+# Muoto on ottelusta 146447, jossa vuoropareja on kaksi.
+VUOROPARIPELI_TULOS = {
     "periods": {"home": 0, "away": 0},
-    "runs": [{"home": [2, 1, 0, 3], "away": [1, 0, 2, None]}],
+    "runs": [{"home": [8, None], "away": [7, 2]}],
     "outCount": 1,
-    "currentPeriod": 0,
-    "currentInning": 3,
+    "currentPeriod": -1,
+    "currentInning": 1,
     "batTurn": 1,
     "batTurnTeamKey": "away",
     "finished": False,
@@ -85,12 +101,13 @@ SUPERVUORO_TULOS = {
 }
 
 
-def osio(otsikko, kuvaus, html):
+def osio(otsikko, kuvaus, taulu_html, tyylit):
+    default_css, siipe_css = tyylit
     return (
         f"<section><h2>{otsikko}</h2><p>{kuvaus}</p>"
         f"<div class='taulut'>"
-        f"<div><h4>style=default</h4><div class='default'>{html}</div></div>"
-        f"<div><h4>style=siipe</h4><div class='siipe'>{html}</div></div>"
+        f"<div><h4>style=default</h4>{kehys(taulu_html, default_css)}</div>"
+        f"<div><h4>style=siipe</h4>{kehys(taulu_html, siipe_css)}</div>"
         f"</div></section>"
     )
 
@@ -100,30 +117,33 @@ def main():
     kaynnissa = taulu({129209: OTTELU_129209}, {129209: kaynnissa_oleva_tulos()}, "/129209/tulostaulu")
     supervuoro = taulu({129209: OTTELU_129209}, {129209: SUPERVUORO_TULOS}, "/129209/tulostaulu")
     alkamaton = taulu({129199: OTTELU_129199}, {}, "/129199/tulostaulu")
-    juniori = taulu({129209: OTTELU_129209}, {129209: JUNIORI_TULOS}, "/129209/tulostaulu")
+    vuoroparipeli = taulu({146447: OTTELU_146447}, {146447: TULOS_146447}, "/146447/tulostaulu")
+    vuoroparipeli_kesken = taulu(
+        {146447: OTTELU_146447}, {146447: VUOROPARIPELI_TULOS}, "/146447/tulostaulu"
+    )
 
-    with open(os.path.join(JUURI, "static/css/scoreboard_default.css"), encoding="utf-8") as f:
-        default_css = f.read()
-    with open(os.path.join(JUURI, "static/css/scoreboard_siipe.css"), encoding="utf-8") as f:
-        siipe_css = f.read()
-
-    tyylit = scope(default_css, ".default") + "\n" + scope(siipe_css, ".siipe")
+    tyylit = (lue_css("scoreboard_default.css"), lue_css("scoreboard_siipe.css"))
 
     sisalto = "".join([
         osio("Päättynyt ottelu (129209)",
              "Tilarivillä lukee &quot;Ottelu on päättynyt&quot;. Muu taulu näytetään normaalisti. "
-             "Lopputulos API:n mukaan 2-0 (8-3, 6-2).", paattynyt),
+             "Lopputulos API:n mukaan 2-0 (8-3, 6-2).", paattynyt, tyylit),
         osio("Käynnissä oleva ottelu",
              "1. jakso, 2. vuoropari, koti lyömässä lopettavana, 2 paloa. "
-             "Sisävuoro on korostettu ja palot näkyvät lyövän joukkueen rivillä.", kaynnissa),
+             "Sisävuoro on korostettu ja palot näkyvät lyövän joukkueen rivillä.", kaynnissa, tyylit),
         osio("Supervuoro",
-             "Jaksot 1-1, menossa supervuoro. Vieras lyömässä.", supervuoro),
+             "Jaksot 1-1, menossa supervuoro. Vieras lyömässä.", supervuoro, tyylit),
         osio("Ottelu ei ole alkanut (129199)",
              "API palauttaa {&quot;result&quot;:null}. Joukkueiden nimet haetaan silti "
-             "/match-kutsulla ja tilariville tulee &quot;Ottelu ei ole alkanut&quot;.", alkamaton),
-        osio("Junioriottelu",
-             "isPeriodMatch = false: ei jaksovoittoja, vain yksi jaksosarake ja "
-             "otteluinfoksi &quot;Junioriottelu&quot;.", juniori),
+             "/match-kutsulla ja tilariville tulee &quot;Ottelu ei ole alkanut&quot;.", alkamaton, tyylit),
+        osio("Vuoroparipeli, päättynyt (146447)",
+             "isPeriodMatch = false: ei jaksoja eikä jaksovoittoja. Sarakkeina ovat "
+             "vuoroparit ja lihavoidussa sarakkeessa juoksut yhteensä (17-14).",
+             vuoroparipeli, tyylit),
+        osio("Vuoroparipeli, käynnissä",
+             "2. vuoropari kesken, vieras lyömässä lopettavana. Kotijoukkueen "
+             "pelaamaton vuoropari jää tyhjäksi ja tilarivillä näkyy pelkkä vuoropari.",
+             vuoroparipeli_kesken, tyylit),
     ])
 
     sivu = f"""<!DOCTYPE html>
@@ -139,19 +159,36 @@ section{{background:#fff;border:1px solid #e3e6ea;border-radius:10px;padding:20p
 h2{{font-size:16px;margin:0 0 4px}}
 section > p{{margin:0 0 18px;color:#5a6169;font-size:13px;max-width:78ch;line-height:1.5}}
 h4{{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8a9099;margin:0 0 10px;font-weight:600}}
-.taulut{{display:flex;gap:48px;flex-wrap:wrap}}
-{tyylit}
+.taulut{{display:flex;gap:32px;flex-wrap:wrap}}
+.taulut{{align-items:flex-start}}
+iframe.taulu{{border:0;width:360px;height:170px;display:block}}
 </style>
+<script>
+function sovita(kehys) {{
+    var doc = kehys.contentDocument;
+    kehys.style.height = doc.documentElement.scrollHeight + 'px';
+    kehys.style.width = (Math.ceil(doc.body.scrollWidth) + 8) + 'px';
+}}
+// Srcdoc-iframen onload voi ehtiä ennen tyylien soveltamista, joten
+// mitat lasketaan vielä kertaalleen kun koko sivu on latautunut.
+window.addEventListener('load', function () {{
+    document.querySelectorAll('iframe.taulu').forEach(sovita);
+}});
+</script>
 </head>
 <body>
 <h1>JPP-tulostaulu &ndash; pesistulokset-API -version esikatselu</h1>
 <p class="ingressi">Kaikki taulut on renderöity uudella koodilla suoraan API-datasta.
-Ottelu 129209 on liitteen esimerkkiottelu ja 129199 ottelu, jota ei ole vielä pelattu.
-Käynnissä oleva tilanne, supervuoro ja junioriottelu on rakennettu API:n muotoa noudattavasta
-testidatasta, koska otteluita ei juuri nyt ole käynnissä.</p>
+Ottelu 129209 on liitteen esimerkkiottelu, 129199 ottelu jota ei ole vielä pelattu ja
+146447 junnusuperin vuoroparipeli. Käynnissä olevat tilanteet ja supervuoro on rakennettu
+API:n muotoa noudattavasta testidatasta, koska otteluita ei juuri nyt ole käynnissä.
+Jokainen taulu on omassa iframessaan kuten oikeassa upotuksessa.</p>
 {sisalto}
 </body>
 </html>"""
+    # Windowsissa uudelleenohjattu stdout käyttäisi muuten konsolin
+    # koodisivua, jolloin ääkköset menevät rikki tiedostoon.
+    sys.stdout.reconfigure(encoding="utf-8")
     sys.stdout.write(sivu)
 
 

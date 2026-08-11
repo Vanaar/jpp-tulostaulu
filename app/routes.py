@@ -1,7 +1,7 @@
 from flask import request, redirect, render_template, Blueprint
 from threading import RLock
 
-from app.functions import debug_message
+from app.functions import debug_message, parsi_koko
 from app.live import rakenna_ottelu
 from app.pesistulokset_api import ApiVirhe, hae_live_tulos, hae_ottelu
 from config import Config
@@ -134,13 +134,15 @@ def ottelu_tulostaulu(ottelunumero):
     """Widgetin osoite: /<ottelunumero>. Käyttö säilyy ennallaan."""
     debug = request.args.get('debug', 'off')
     style = request.args.get('style', 'default')
+    # Valinnainen kokokerroin striimigrafiikkaa varten; oletus 1.0
+    koko = parsi_koko(request.args.get('koko'))
 
     # Manuaalitaulu tunnistetaan kannasta, muuten tiedot haetaan API:sta
     if _on_manuaaliottelu(ottelunumero):
         ottelu = _hae_manuaaliottelu(ottelunumero)
         if ottelu:
             return render_template('ottelu.html', ottelu=ottelu, pesistulokset=False,
-                                   debug=debug, style=style,
+                                   debug=debug, style=style, koko=koko,
                                    paivitysvali=_paivitysvali())
 
     try:
@@ -151,7 +153,7 @@ def ottelu_tulostaulu(ottelunumero):
         return "Pesistulokset-palveluun ei juuri nyt saada yhteyttä.", 503
 
     return render_template('ottelu.html', ottelu={'ottelunumero': ottelunumero},
-                           pesistulokset=True, debug=debug, style=style,
+                           pesistulokset=True, debug=debug, style=style, koko=koko,
                            paivitysvali=_paivitysvali())
 
 

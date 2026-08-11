@@ -1,57 +1,34 @@
-/* Set default font family and size for the table */
-table {
-    font-family: Arial, sans-serif;
-    font-size: 16px;
-  }
-  
-  /* Set table borders */
-  table {
-    border: none;
-    border-collapse: collapse;
-  }
-  
-  /* Set background color for header row */
-  thead tr {
-    background-color: #444;
-    color: #fff;
-  }
-  
-  tr.top td {
-      background-color: navy;
-      color: white;	
-  }
-  
-  td {
-      border: 1px solid black;
-      background-color: white;
-  }
-  
-  /* Set background color for selected cells */
-  td.total-points {
-    background-color: cyan;
-  }
-  
-  td.sisavuoro {
-    background-color: gold;
-  }
-  
-  td.current_period {
-      background-color: navy;
-      color: white;
-  }
-  
-  td.invisible {
-      visibility: hidden;
-      border: none;
-  }
-  
-  td.palot {
-      color: red;
-      border: none;
-      background: transparent;
-      background-color: rgba(255, 255, 255, 0); /* Fully transparent white */
-  }
+/* Oletustyyli: laivastonsininen otsikkopalkki, vaaleansininen päätulos,
+ * kullankeltainen sisävuoro. Rakenne tulee scoreboard_base.css:stä, joka
+ * ladataan ennen tätä. Väriä vaihdetaan asettamalla muuttujia uudelleen. */
 
-  td.promo {
-    font-size: 10px;
-  }
+:root {
+    --pt-pinta: #ffffff;
+    --pt-teksti: #16202b;
+    --pt-viiva: rgba(20, 35, 60, 0.12);
+
+    /* Otsikkopalkki ja tilarivi */
+    --pt-korostus-tausta: #14265c;
+    --pt-korostus-teksti: #ffffff;
+    --pt-korostus-teksti-himmea: rgba(255, 255, 255, 0.78);
+
+    /* Jaksovoitot / juoksut yhteensä */
+    --pt-paapiste-tausta: #d7f2f7;
+    --pt-paapiste-teksti: #0c3350;
+
+    /* Pistesarakkeet */
+    --pt-tulos-tausta: #ffffff;
+    --pt-tulos-teksti: #16202b;
+
+    /* Sisävuorossa oleva joukkue */
+    --pt-sisavuoro-tausta: #ffd764;
+    --pt-sisavuoro-teksti: #3a2c00;
+    --pt-sisavuoro-reuna: rgba(176, 122, 0, 0.45);
+
+    --pt-promo-tausta: #f3f5f8;
+    --pt-promo-teksti: #6b7480;
+    --pt-palot: #d4342c;
+
+    --pt-varjo: drop-shadow(0 1px 2px rgba(15, 25, 45, 0.13))
+                drop-shadow(0 6px 14px rgba(15, 25, 45, 0.10));
+}

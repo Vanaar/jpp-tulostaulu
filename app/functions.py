@@ -2,6 +2,35 @@ from config import Config
 import datetime
 
 
+# Widgetin kokokerroin (?koko=). Rajat estävät sen, että yksittäinen upotus
+# tuottaisi mielivaltaisen suuren tai olemattoman pienen taulun.
+KOKO_MIN = 0.5
+KOKO_MAX = 5.0
+KOKO_OLETUS = 1.0
+
+
+def parsi_koko(arvo):
+    """Tulkitsee ?koko=<kerroin> -parametrin. Virheellinen arvo -> 1.0.
+
+    Kerroin annetaan taululle `zoom`-tyylinä, jolloin se skaalautuu
+    asettelutasolla ja pysyy terävänä. Striimiohjelman lähteen venyttäminen
+    sen sijaan skaalaa valmiin bittikartan ja pehmentää tekstin.
+    """
+    if arvo is None:
+        return KOKO_OLETUS
+
+    try:
+        koko = float(str(arvo).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return KOKO_OLETUS
+
+    # NaN ei ole yhtä suuri itsensä kanssa; äärettömyydet eivät kelpaa myöskään
+    if koko != koko or koko in (float("inf"), float("-inf")):
+        return KOKO_OLETUS
+
+    return min(max(koko, KOKO_MIN), KOKO_MAX)
+
+
 def debug_message(message, level=1):
     if Config.DEBUG and level >= Config.DEBUG_LEVEL:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

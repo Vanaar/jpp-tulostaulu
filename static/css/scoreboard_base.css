@@ -1,0 +1,223 @@
+/* Tulostaulun rakenne: mitat, typografia ja muodot.
+ *
+ * Värit tulevat CSS-muuttujista, jotka tyylikohtainen tiedosto asettaa
+ * (scoreboard_default.css tai scoreboard_siipe.css). Uutta väritystä
+ * tehdessä riittää siis muuttujien asettaminen; tähän tiedostoon ei
+ * tarvitse koskea. ottelu.html lataa ensin tämän ja sitten tyylin.
+ *
+ * Taulun rakenne (app/templates/tulostaulu.html):
+ *   tr.top        otsikkopalkki, sarakkeiden nimet
+ *   tr.tulosrivi  joukkue, päätulos, pistesarakkeet, palot
+ *   tr.tilarivi   jakso/vuoropari vasemmalla, otteluinfo oikealla
+ *   td.promo      alatunniste
+ *
+ * Kaikki säännöt on kirjoitettu `table.scoreboard`-alkuisina, jotta
+ * spesifisyys pysyy samana ja lähdejärjestys ratkaisee. Ilman sitä yleinen
+ * solusääntö jyräisi yksittäisten solujen värit.
+ *
+ * Palosarake (td.palot) on läpinäkyvä ja jää taulun oikealle puolelle sen
+ * ulkopuolelle. Siksi pyöristys kohdistetaan kulmasoluihin eikä tauluun,
+ * ja varjo tehdään drop-shadowilla, joka seuraa piirtojälkeä eikä laatikkoa.
+ */
+
+:root {
+    --pt-fontti: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    --pt-fonttikoko: 16px;
+    --pt-pyoristys: 12px;
+    /* Yhden tulossarakkeen sisällön vähimmäisleveys ja sivupehmuste.
+     * Otsikko- ja tulossolun on käytettävä samoja arvoja, muuten leveämpi
+     * niistä määrää sarakkeen. Vähimmäisleveys 1em riittää kaksinumeroiselle
+     * luvulle (16 px vs. "17" = 15 px); kolminumeroinen levittää saraketta,
+     * ja niin kuuluukin. */
+    --pt-tulossarake: 1em;
+    --pt-tulossarake-pehmuste: 9px;
+
+    /* Oletusvärit. Tyylitiedosto ylikirjoittaa nämä. */
+    --pt-pinta: #ffffff;
+    --pt-teksti: #16202b;
+    --pt-viiva: rgba(20, 35, 60, 0.12);
+    --pt-korostus-tausta: #14265c;
+    --pt-korostus-teksti: #ffffff;
+    --pt-korostus-teksti-himmea: rgba(255, 255, 255, 0.78);
+    --pt-paapiste-tausta: #d7f2f7;
+    --pt-paapiste-teksti: #0c3350;
+    --pt-tulos-tausta: #ffffff;
+    --pt-tulos-teksti: #16202b;
+    --pt-sisavuoro-tausta: #ffd764;
+    --pt-sisavuoro-teksti: #3a2c00;
+    --pt-sisavuoro-reuna: rgba(176, 122, 0, 0.45);
+    --pt-promo-tausta: #f3f5f8;
+    --pt-promo-teksti: #6b7480;
+    --pt-palot: #d4342c;
+    --pt-varjo: drop-shadow(0 1px 2px rgba(15, 25, 45, 0.13))
+                drop-shadow(0 6px 14px rgba(15, 25, 45, 0.10));
+}
+
+table.scoreboard {
+    border-collapse: separate;
+    border-spacing: 0;
+    border: none;
+    max-width: 100%;
+    font-family: var(--pt-fontti);
+    font-size: var(--pt-fonttikoko);
+    line-height: 1.15;
+    color: var(--pt-teksti);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    filter: var(--pt-varjo);
+}
+
+table.scoreboard td {
+    border: none;
+    background-color: var(--pt-pinta);
+    padding: 8px 10px;
+}
+
+/* --- Pyöristetyt kulmat ---------------------------------------------
+ * Ensimmäinen ja viimeinen rivi taipuvat riippumatta siitä, onko
+ * debug-rivi näkyvissä. Rivien sisällä ei tarvita pyöristystä. */
+table.scoreboard tbody tr:first-child td:first-child {
+    border-top-left-radius: var(--pt-pyoristys);
+}
+table.scoreboard tbody tr:first-child td:last-child {
+    border-top-right-radius: var(--pt-pyoristys);
+}
+table.scoreboard tbody tr:last-child td:first-child {
+    border-bottom-left-radius: var(--pt-pyoristys);
+}
+table.scoreboard tbody tr:last-child td:last-child {
+    border-bottom-right-radius: var(--pt-pyoristys);
+}
+
+/* --- Otsikkopalkki --------------------------------------------------- */
+table.scoreboard tr.top td {
+    background-color: var(--pt-korostus-tausta);
+    color: var(--pt-korostus-teksti);
+    font-size: 0.68em;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 7px 10px;
+}
+
+/* Vasen yläkulma oli ennen piilotettu. Nyt se on osa otsikkopalkkia,
+ * jotta taulu on suorakaide eikä L-kirjain. Luokka on jätetty paikalleen,
+ * koska molemmat taulut käyttävät sitä. */
+table.scoreboard tr.top td.invisible {
+    visibility: visible;
+}
+
+table.scoreboard tr.top td.otsikko {
+    min-width: var(--pt-tulossarake);
+    padding-left: var(--pt-tulossarake-pehmuste);
+    padding-right: var(--pt-tulossarake-pehmuste);
+}
+
+/* --- Tulosrivit ------------------------------------------------------ */
+table.scoreboard tr.tulosrivi td {
+    border-top: 1px solid var(--pt-viiva);
+}
+
+table.scoreboard tr.tulosrivi td.joukkue {
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+    padding-right: 18px;
+}
+
+table.scoreboard tr.tulosrivi td.tulos {
+    text-align: center;
+    min-width: var(--pt-tulossarake);
+    padding-left: var(--pt-tulossarake-pehmuste);
+    padding-right: var(--pt-tulossarake-pehmuste);
+    font-weight: 600;
+    background-color: var(--pt-tulos-tausta);
+    color: var(--pt-tulos-teksti);
+    border-left: 1px solid var(--pt-viiva);
+}
+
+table.scoreboard tr.tulosrivi td.total-points {
+    text-align: center;
+    min-width: 2.1em;
+    font-weight: 700;
+    background-color: var(--pt-paapiste-tausta);
+    color: var(--pt-paapiste-teksti);
+}
+
+/* Sisävuoron korostus. Tulee tulossolun jälkeen, joten se voittaa ilman
+ * !importantia myös silloin kun tyyli värittää tulossarakkeet. */
+table.scoreboard tr.tulosrivi td.sisavuoro {
+    background-color: var(--pt-sisavuoro-tausta);
+    color: var(--pt-sisavuoro-teksti);
+    box-shadow: inset 0 0 0 2px var(--pt-sisavuoro-reuna);
+}
+
+/* Palot jäävät taulun ulkopuolelle oikealle: ei taustaa eikä reunaa. */
+table.scoreboard tr.tulosrivi td.palot {
+    background-color: transparent;
+    border: none;
+    padding: 0 0 0 10px;
+    color: var(--pt-palot);
+    font-size: 0.8em;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    line-height: 1.05;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* --- Tilarivi -------------------------------------------------------- */
+table.scoreboard td.current_period {
+    background-color: var(--pt-korostus-tausta);
+    color: var(--pt-korostus-teksti);
+    font-size: 0.72em;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 7px 10px;
+    white-space: nowrap;
+}
+
+/* Oikea puoli on kevyempi kuin jakso/vuoropari. Vaimennus tehdään omalla
+ * värimuuttujalla eikä opacityllä, joka himmentäisi myös taustan ja
+ * jättäisi tilariviin näkyvän pystysauman. */
+table.scoreboard td.current_period.otteluinfo {
+    text-align: right;
+    font-weight: 500;
+    color: var(--pt-korostus-teksti-himmea);
+}
+
+/* --- Alatunniste ----------------------------------------------------- */
+table.scoreboard td.promo,
+table.scoreboard tr.debug td {
+    background-color: var(--pt-promo-tausta);
+    color: var(--pt-promo-teksti);
+    font-size: 0.62em;
+    letter-spacing: 0.03em;
+    text-align: center;
+    padding: 5px 10px;
+}
+
+table.scoreboard tr.debug td {
+    border-top: 1px solid var(--pt-viiva);
+}
+
+/* --- Kapea upotus ---------------------------------------------------- */
+@media (max-width: 400px) {
+    table.scoreboard {
+        --pt-fonttikoko: 14px;
+        --pt-tulossarake-pehmuste: 6px;
+    }
+
+    table.scoreboard td {
+        padding: 6px 7px;
+    }
+
+    table.scoreboard tr.tulosrivi td.joukkue {
+        max-width: 38vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
