@@ -19,9 +19,9 @@
                 <td class="joukkue">{{ottelu.kotijoukkue}}</td>
                 <td class="total-points">{{ paapisteet_koti if paapisteet_koti is not none else '' }}</td>
                 {%- for sarake in sarakkeet %}
-                <td class="tulos{% if sarake.aktiivinen and ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %} sisavuoro{% endif %}">{{ sarake.koti if sarake.koti is not none else '' }}</td>
+                <td class="tulos{% if sarake.aktiivinen and ottelu.sisavuoro == 'koti' %} sisavuoro{% endif %}">{{ sarake.koti if sarake.koti is not none else '' }}</td>
                 {%- endfor %}
-                {%- if ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue %}
+                {%- if ottelu.sisavuoro == 'koti' %}
                 <td class="palot">{{ottelu.palot|safe}}</td>
                 {%- endif %}
             </tr>
@@ -29,9 +29,9 @@
                 <td class="joukkue">{{ottelu.vierasjoukkue}}</td>
                 <td class="total-points">{{ paapisteet_vieras if paapisteet_vieras is not none else '' }}</td>
                 {%- for sarake in sarakkeet %}
-                <td class="tulos{% if sarake.aktiivinen and ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %} sisavuoro{% endif %}">{{ sarake.vieras if sarake.vieras is not none else '' }}</td>
+                <td class="tulos{% if sarake.aktiivinen and ottelu.sisavuoro == 'vieras' %} sisavuoro{% endif %}">{{ sarake.vieras if sarake.vieras is not none else '' }}</td>
                 {%- endfor %}
-                {%- if ottelu.nykyinen_lyontivuoro == ottelu.vierasjoukkue %}
+                {%- if ottelu.sisavuoro == 'vieras' %}
                 <td class="palot">{{ottelu.palot|safe}}</td>
                 {%- endif %}
             </tr>
