@@ -1,4 +1,6 @@
 from config import Config
+
+import constants
 import datetime
 
 
@@ -31,8 +33,12 @@ def parsi_koko(arvo):
     return min(max(koko, KOKO_MIN), KOKO_MAX)
 
 
-def debug_message(message, level=1):
-    if Config.DEBUG and level >= Config.DEBUG_LEVEL:
+def debug_message(message, level=constants.DEBUG_MESSAGE_LEVEL_ALL):
+    # Puuttuva asetus ei saa kaataa sovellusta: tuotannon config.py:stä
+    # puuttui DEBUG_LEVEL, ja suora Config-luku kaatoi 19.8.2026 jokaisen
+    # tulostaulun. Kaikki asetukset luetaan siksi getattrin läpi.
+    if getattr(Config, 'DEBUG', False) and level >= getattr(
+            Config, 'DEBUG_LEVEL', constants.DEBUG_MESSAGE_LEVEL_ALL):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] {message}")
 

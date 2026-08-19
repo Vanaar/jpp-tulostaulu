@@ -220,6 +220,53 @@ class VuoroparipeliTesti(unittest.TestCase):
         self.assertIn("Vuoroparipeli", sisalto)
 
 
+class AsetusTesti(unittest.TestCase):
+    """Puuttuva config.py-asetus ei saa kaataa sovellusta.
+
+    19.8.2026 tuotannon config.py:stä puuttui DEBUG_LEVEL, jonka
+    debug_message luki suoraan Configista. Syntynyt AttributeError kaatoi
+    jokaisen tulostaulun. Kaikki asetukset luetaan siksi getattrin läpi.
+    """
+
+    def test_debug_message_ilman_debug_levelia(self):
+        from app.functions import debug_message
+        from config import Config
+
+        alkuperainen_debug = getattr(Config, "DEBUG", False)
+        oli_level = hasattr(Config, "DEBUG_LEVEL")
+        alkuperainen_level = getattr(Config, "DEBUG_LEVEL", None)
+
+        Config.DEBUG = True
+        if oli_level:
+            del Config.DEBUG_LEVEL
+
+        def palauta():
+            Config.DEBUG = alkuperainen_debug
+            if oli_level:
+                Config.DEBUG_LEVEL = alkuperainen_level
+
+        self.addCleanup(palauta)
+
+        debug_message("testi")
+
+    def test_debug_message_ilman_debugia(self):
+        from app.functions import debug_message
+        from config import Config
+
+        oli_debug = hasattr(Config, "DEBUG")
+        alkuperainen = getattr(Config, "DEBUG", None)
+        if oli_debug:
+            del Config.DEBUG
+
+        def palauta():
+            if oli_debug:
+                Config.DEBUG = alkuperainen
+
+        self.addCleanup(palauta)
+
+        debug_message("testi")
+
+
 class EiTietokantaaTesti(unittest.TestCase):
     """Regressiovahti: tietokantaa ei ole eikä sitä saa tulla takaisin.
 
