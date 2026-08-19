@@ -33,6 +33,24 @@ def parsi_koko(arvo):
     return min(max(koko, KOKO_MIN), KOKO_MAX)
 
 
+def parsi_ottelunumero(arvo):
+    """Tulkitsee juurisivun lomakkeen syötteen. Virheellinen arvo -> None.
+
+    Kelvollinen syöte on pelkkiä numeroita; välilyönnit trimmataan.
+    int() pudottaa etunollat, jolloin "007" avaa osoitteen /7.
+    isdigit() hyväksyisi myös yläindeksit ja muut kuin arabialaiset
+    numeromerkit, joita int() ei osaa lukea, joten ascii vaaditaan erikseen.
+    """
+    if arvo is None:
+        return None
+
+    syote = str(arvo).strip()
+    if not (syote.isascii() and syote.isdigit()):
+        return None
+
+    return int(syote)
+
+
 def debug_message(message, level=constants.DEBUG_MESSAGE_LEVEL_ALL):
     # Puuttuva asetus ei saa kaataa sovellusta: tuotannon config.py:stä
     # puuttui DEBUG_LEVEL, ja suora Config-luku kaatoi 19.8.2026 jokaisen

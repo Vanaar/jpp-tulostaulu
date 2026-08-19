@@ -35,18 +35,15 @@ def luo_sovellus():
     """Rakentaa Flask-sovelluksen samoin kuin jpp-tulostaulu.py.
 
     Varsinaista käynnistystiedostoa ei voi importata, koska sen nimessä on
-    väliviiva.
+    väliviiva. Reitit tulevat blueprintistä, joten niitä ei tarvitse enää
+    muistaa määritellä kahteen kertaan; polut sen sijaan pitää.
     """
-    from flask import Flask, render_template
+    from flask import Flask
 
     from app.routes import routes_bp
 
     app = Flask(__name__, template_folder='../app/templates', static_folder='../static')
     app.register_blueprint(routes_bp)
-
-    @app.route("/")
-    def jpp_tulostaulu():
-        return render_template('index.html')
 
     return app
 
@@ -177,6 +174,54 @@ class ReittiTesti(unittest.TestCase):
 
         # 20 selainpyyntöä -> korkeintaan yksi match- ja yksi live-result-kutsu
         self.assertLessEqual(kutsut["n"], 2)
+
+
+class JuurisivuTesti(unittest.TestCase):
+    """/ on ottelunumeron avauslomake, ei hallintakäyttöliittymä.
+
+    Tarkistus tehdään palvelimella, jotta lomake toimii myös ilman
+    JavaScriptiä.
+    """
+
+    def setUp(self):
+        app = luo_sovellus()
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+
+    def test_lomake_naytetaan(self):
+        vastaus = self.client.get("/")
+        self.assertEqual(vastaus.status_code, 200)
+        sisalto = vastaus.get_data(as_text=True)
+        self.assertIn('name="ottelunumero"', sisalto)
+        self.assertIn("Avaa tulostaulu", sisalto)
+
+    def test_kelvollinen_numero_ohjaa(self):
+        vastaus = self.client.get("/?ottelunumero=129209")
+        self.assertEqual(vastaus.status_code, 302)
+        self.assertTrue(vastaus.headers["Location"].endswith("/129209"))
+
+    def test_etunollat_karsiutuvat(self):
+        vastaus = self.client.get("/?ottelunumero=007")
+        self.assertEqual(vastaus.status_code, 302)
+        self.assertTrue(vastaus.headers["Location"].endswith("/7"))
+
+    def test_valilyonnit_trimmataan(self):
+        vastaus = self.client.get("/?ottelunumero=%20129209%20")
+        self.assertEqual(vastaus.status_code, 302)
+        self.assertTrue(vastaus.headers["Location"].endswith("/129209"))
+
+    def test_roskasyote_ei_ohjaa(self):
+        for syote in ("abc", "", "12a", "-5", "1.5"):
+            with self.subTest(syote=syote):
+                vastaus = self.client.get(f"/?ottelunumero={syote}")
+                self.assertEqual(vastaus.status_code, 200)
+                self.assertIn("Anna ottelunumero numeroina.",
+                              vastaus.get_data(as_text=True))
+
+    def test_manuaalitaulun_linkkeja_ei_ole(self):
+        sisalto = self.client.get("/").get_data(as_text=True)
+        self.assertNotIn("/uusi", sisalto)
+        self.assertNotIn("/paivita", sisalto)
 
 
 class VuoroparipeliTesti(unittest.TestCase):

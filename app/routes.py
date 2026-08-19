@@ -1,6 +1,6 @@
 from flask import request, redirect, render_template, Blueprint
 
-from app.functions import debug_message, parsi_koko
+from app.functions import debug_message, parsi_koko, parsi_ottelunumero
 from app.live import rakenna_ottelu
 from app.pesistulokset_api import ApiVirhe, hae_live_tulos, hae_ottelu
 from config import Config
@@ -24,6 +24,26 @@ def _hae_liveottelu(ottelunumero):
 
     tulos = hae_live_tulos(ottelunumero)
     return rakenna_ottelu(ottelunumero, ottelu_data, tulos)
+
+
+@routes_bp.route("/", methods=['GET'])
+def etusivu():
+    """Ottelunumeron avauslomake. Ei hallintakäyttöliittymä.
+
+    Lomake toimii myös ilman JavaScriptiä: se lähettää GET /?ottelunumero=...,
+    joka joko ohjaa taululle tai renderöi lomakkeen virheviestin kanssa.
+    Ilman parametria näytetään pelkkä tyhjä lomake.
+    """
+    syote = request.args.get('ottelunumero')
+    if syote is None:
+        return render_template('index.html')
+
+    ottelunumero = parsi_ottelunumero(syote)
+    if ottelunumero is None:
+        return render_template('index.html', syote=syote,
+                               virhe="Anna ottelunumero numeroina.")
+
+    return redirect(f'/{ottelunumero}')
 
 
 @routes_bp.route("/hellurei")
