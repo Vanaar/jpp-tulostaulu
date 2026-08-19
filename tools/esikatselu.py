@@ -25,7 +25,6 @@ from test_live import (  # noqa: E402
 from test_reitit import luo_sovellus, tee_vastaaja  # noqa: E402
 
 from app import pesistulokset_api  # noqa: E402
-import app.routes as routes  # noqa: E402
 from config import Config  # noqa: E402
 
 Config.DEBUG = False
@@ -37,7 +36,6 @@ _client = _app.test_client()
 
 def taulu(ottelut, tulokset, polku):
     pesistulokset_api.tyhjenna_valimuisti()
-    routes._tyhjenna_reititys()
     with mock.patch(
         "app.pesistulokset_api.requests.get",
         side_effect=tee_vastaaja(ottelut, tulokset),
