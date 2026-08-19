@@ -125,6 +125,19 @@ Kaksi päätepistettä, molemmat `?id=<numero>&apikey=<avain>`:
 (elävä tilanne). Esimerkkivastaukset ovat `tests/test_live.py`:n vakioina —
 käytä niitä totuutena, älä arvaa kenttien muotoa.
 
+- **403 ei koskaan kerro syytään.** Väärä avain, kokonaan puuttuva avain ja
+  olematon ottelunumero antavat kaikki tavulleen identtisen `403 Forbidden`in,
+  jonka JSON-runko on `{"message": ""}` (ilman `Accept: application/json`
+  -otsaketta Laravelin geneerinen HTML-virhesivu). Mikään vastauksessa ei
+  erottele näitä kolmea tilannetta. Todennettu 19.8.2026 selvityksessä, joka
+  alkoi siitä että käsin kopioidussa avaimessa oli yksi ylimääräinen väliviiva
+  kahdeksantena merkkinä — 403 näytti aluksi koko `/public/*`-päätepisteen
+  kaatumiselta. Kun API-kutsu epäonnistuu, tarkista siis avain **ennen** kuin
+  epäilet ottelunumeroa tai API:n tilaa. Ristiintarkistus: jos
+  `/online/<id>/events` vastaa 200:lla, verkko ja host ovat kunnossa ja vika on
+  avaimessa. Huomaa myös, että olematon **polku** antaa 404:n, joten 403
+  tarkoittaa aina että reitti on olemassa.
+
 - **`currentPeriod` ja `currentInning` lasketaan eri tavalla, vaikka ne ovat
   samassa vastauksessa.** Tämä on API:n pahin ansa, ja se maksoi yhden
   kokonaisen bugikierroksen.
