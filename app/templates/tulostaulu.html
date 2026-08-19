@@ -1,35 +1,10 @@
 {#-
-    Yksi template palvelee kahta datamallia (ks. CLAUDE.md):
-
-    - LiveOttelu (app/live.py) antaa sarakkeet valmiina. Jaksopelissä ne ovat
-      jaksot (1, 2, S, K) ja vuoroparipelissä yksittäiset vuoroparit.
-    - Manuaalitaulun Otteludata (app/models.py) ei tunne sarakkeita lainkaan,
-      joten sille rakennetaan tässä kiinteät neljä jaksosaraketta kuten ennen.
-
-    Jos lisäät sarakkeisiin kentän, muista molemmat haarat.
-
-    Haara valitaan sen mukaan onko kenttää olemassa, EI sen pituudesta:
-    tyhjä lista tarkoittaisi silloin jaksopelin sarakkeita myös vuoropari-
-    pelille. LiveOttelun sarakelista ei ole koskaan tyhjä.
+    Sarakkeet tulevat aina näkymämallilta (app/live.py: Ottelu). Jaksopelissä
+    ne ovat jaksot (1, 2, S, K) ja vuoroparipelissä yksittäiset vuoroparit.
 -#}
-{% if ottelu.sarakkeet is defined %}
-    {% set sarakkeet = ottelu.sarakkeet %}
-    {% set paapisteet_koti = ottelu.paapisteet_koti %}
-    {% set paapisteet_vieras = ottelu.paapisteet_vieras %}
-{% else %}
-    {% set sarakkeet = [
-        {'otsikko': '1', 'koti': ottelu.jakso_1_koti_juoksut,
-         'vieras': ottelu.jakso_1_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 1},
-        {'otsikko': '2', 'koti': ottelu.jakso_2_koti_juoksut,
-         'vieras': ottelu.jakso_2_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 2},
-        {'otsikko': 'S', 'koti': ottelu.jakso_3_koti_juoksut,
-         'vieras': ottelu.jakso_3_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 3},
-        {'otsikko': 'K', 'koti': ottelu.jakso_4_koti_juoksut,
-         'vieras': ottelu.jakso_4_vieras_juoksut, 'aktiivinen': ottelu.jakso_nro == 4}
-    ] %}
-    {% set paapisteet_koti = ottelu.koti_jaksovoitot %}
-    {% set paapisteet_vieras = ottelu.vieras_jaksovoitot %}
-{% endif %}
+{% set sarakkeet = ottelu.sarakkeet %}
+{% set paapisteet_koti = ottelu.paapisteet_koti %}
+{% set paapisteet_vieras = ottelu.paapisteet_vieras %}
 {#- Joukkue- ja päärivisarake mukaan lukien. Palosarake ei kuulu tauluun. -#}
 {% set leveys = sarakkeet | length + 2 %}
     <table class="scoreboard">
@@ -82,7 +57,7 @@
             {% if debug == "on" %}
             <tr class="debug">
                 <td colspan="{{ leveys }}">
-                    Päivitys: {% if pesistulokset %} Pesistulokset-API {% else %} Manuaalinen {% endif %}
+                    Päivitys: Pesistulokset-API
                 </td>
             </tr>
             {% endif %}

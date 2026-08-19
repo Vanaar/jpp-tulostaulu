@@ -183,10 +183,9 @@ class VuoroparipeliTesti(unittest.TestCase):
     """Taulun muoto tulee datasta: vuoroparipelissä ei piirretä jaksoja."""
 
     def setUp(self):
-        from app import pesistulokset_api, routes
+        from app import pesistulokset_api
 
         pesistulokset_api.tyhjenna_valimuisti()
-        routes._tyhjenna_reititys()
 
         patcher = mock.patch(
             "app.pesistulokset_api.requests.get",
@@ -221,26 +220,18 @@ class VuoroparipeliTesti(unittest.TestCase):
         self.assertIn("Vuoroparipeli", sisalto)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class EiTietokantaaTesti(unittest.TestCase):
+    """Regressiovahti: tietokantaa ei ole eikä sitä saa tulla takaisin.
 
-
-class IlmanTietokantaaTesti(unittest.TestCase):
-    """Livetaulun on toimittava, vaikka tietokantaa ei olisi lainkaan."""
+    4.0:ssa manuaalitaulu ja koko kantariippuvuus poistettiin. Aiemmin sama
+    testi varmisti vain, ettei kantaa käytetä; nyt varmistetaan ettei sitä
+    ole olemassakaan.
+    """
 
     def setUp(self):
-        from app import pesistulokset_api, routes
-        from config import Config
+        from app import pesistulokset_api
 
         pesistulokset_api.tyhjenna_valimuisti()
-        routes._tyhjenna_reititys()
-
-        self.alkuperainen = getattr(Config, "MANUAALITAULU_KAYTOSSA", True)
-        Config.MANUAALITAULU_KAYTOSSA = False
-        self.addCleanup(
-            setattr, Config, "MANUAALITAULU_KAYTOSSA", self.alkuperainen
-        )
-        self.addCleanup(routes._tyhjenna_reititys)
 
         patcher = mock.patch(
             "app.pesistulokset_api.requests.get",
@@ -255,12 +246,20 @@ class IlmanTietokantaaTesti(unittest.TestCase):
         app.config["TESTING"] = True
         self.client = app.test_client()
 
-    def test_livetaulu_toimii(self):
-        with mock.patch("app.db.get_db", side_effect=AssertionError("kantaa ei saa käyttää")):
-            vastaus = self.client.get("/129209/tulostaulu")
+    def test_kantamoduulia_ei_ole(self):
+        with self.assertRaises(ModuleNotFoundError):
+            import app.db  # noqa: F401
+
+    def test_sqlalchemyta_ei_ladata(self):
+        vastaus = self.client.get("/129209/tulostaulu")
         self.assertEqual(vastaus.status_code, 200)
         self.assertIn("Jussittaret", vastaus.get_data(as_text=True))
+        self.assertNotIn("sqlalchemy", sys.modules)
 
-    def test_manuaalireitit_pois_kaytosta(self):
+    def test_manuaalireitteja_ei_ole(self):
         self.assertEqual(self.client.get("/uusi").status_code, 404)
         self.assertEqual(self.client.get("/paivita/512345").status_code, 404)
+
+
+if __name__ == "__main__":
+    unittest.main()
