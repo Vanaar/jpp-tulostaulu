@@ -218,6 +218,22 @@ class JuurisivuTesti(unittest.TestCase):
                 self.assertIn("Anna ottelunumero numeroina.",
                               vastaus.get_data(as_text=True))
 
+    def test_syote_palautetaan_kenttaan_eskaapattuna(self):
+        # Virheellinen syöte kaiutetaan takaisin value-attribuuttiin, joten
+        # Jinjan autoescapen on hoidettava lainausmerkit.
+        vastaus = self.client.get('/?ottelunumero=%22%3E%3Cscript%3E')
+        sisalto = vastaus.get_data(as_text=True)
+        self.assertIn('value="&#34;&gt;&lt;script&gt;"', sisalto)
+        self.assertNotIn('value=""><script>', sisalto)
+
+    def test_lomake_ohittaa_selaimen_oman_tarkistuksen(self):
+        # Ilman novalidatea pattern-attribuutti estäisi lähetyksen ennen
+        # submit-käsittelijää, jolloin oma suomenkielinen virheviesti ei
+        # koskaan näkyisi.
+        sisalto = self.client.get("/").get_data(as_text=True)
+        self.assertIn("novalidate", sisalto)
+        self.assertIn('pattern="[0-9]*"', sisalto)
+
     def test_manuaalitaulun_linkkeja_ei_ole(self):
         sisalto = self.client.get("/").get_data(as_text=True)
         self.assertNotIn("/uusi", sisalto)

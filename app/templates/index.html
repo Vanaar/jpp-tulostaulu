@@ -37,8 +37,13 @@
 
     {# Lomake lähettää GET /?ottelunumero=..., jonka palvelin tarkistaa ja
        ohjaa eteenpäin. Alla oleva skripti on pelkkä parannus, joka säästää
-       tämän pyynnön; ilman JavaScriptiä lomake toimii silti. #}
-    <form id="avausLomake" action="/" method="GET">
+       tämän pyynnön; ilman JavaScriptiä lomake toimii silti.
+
+       novalidate: pattern-attribuutti on tässä vain iOS:n numeronäppäimistöä
+       varten. Ilman novalidatea selaimen oma tarkistus estäisi lähetyksen
+       ennen kuin submit-käsittelijä ehtii ajaa, jolloin käyttäjä näkisi
+       selaimen omankielisen kuplan oman virheviestimme sijaan. #}
+    <form id="avausLomake" action="/" method="GET" novalidate>
         <label for="ottelunumero">Ottelunumero</label>
         <div class="rivi">
             <input type="text" id="ottelunumero" name="ottelunumero"
