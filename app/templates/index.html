@@ -1,36 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="fi">
 <head>
-    <title>Päivitä ottelun tietoja</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Junnut Pelaa Pesistä -tulostaulu</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body {
+            font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+            margin: 0; padding: 40px 24px; line-height: 1.5;
+        }
+        main { max-width: 32rem; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+        p.ingressi { margin: 0 0 1.75rem; opacity: .75; }
+        label { display: block; font-weight: 600; margin-bottom: .35rem; }
+        .rivi { display: flex; gap: .5rem; flex-wrap: wrap; }
+        input {
+            flex: 1 1 10rem; font-size: 1.1rem; padding: .55rem .7rem;
+            border: 1px solid currentColor; border-radius: 6px;
+            background: transparent; color: inherit;
+        }
+        button {
+            font-size: 1.1rem; padding: .55rem 1.1rem; border: 0;
+            border-radius: 6px; background: #1d6f42; color: #fff;
+            cursor: pointer;
+        }
+        button:hover { background: #175a36; }
+        .virhe { margin: .6rem 0 0; color: #b3261e; font-weight: 600; }
+    </style>
 </head>
 <body>
-    <h1>Junnut Pelaa Pesistä -tulostaulu (v2)</h1>
+<main>
+    <h1>Junnut Pelaa Pesistä -tulostaulu</h1>
+    <p class="ingressi">Syötä ottelunumero, niin taulu aukeaa osoitteeseen
+        <code>/&lt;ottelunumero&gt;</code>.</p>
 
-    <a href="/uusi">Aloita uusi ottelu</a>
+    {# Lomake lähettää GET /?ottelunumero=..., jonka palvelin tarkistaa ja
+       ohjaa eteenpäin. Alla oleva skripti on pelkkä parannus, joka säästää
+       tämän pyynnön; ilman JavaScriptiä lomake toimii silti.
 
-    <form id="updateForm" action="/paivita/" method="GET">
-        <label for="ottelunumero">Syötä ottelunumero:</label>
-        <input type="text" id="ottelunumero" name="ottelunumero">
-        <button type="submit">Päivitä</button>
+       novalidate: pattern-attribuutti on tässä vain iOS:n numeronäppäimistöä
+       varten. Ilman novalidatea selaimen oma tarkistus estäisi lähetyksen
+       ennen kuin submit-käsittelijä ehtii ajaa, jolloin käyttäjä näkisi
+       selaimen omankielisen kuplan oman virheviestimme sijaan. #}
+    <form id="avausLomake" action="/" method="GET" novalidate>
+        <label for="ottelunumero">Ottelunumero</label>
+        <div class="rivi">
+            <input type="text" id="ottelunumero" name="ottelunumero"
+                   inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+                   value="{{ syote | default('', true) }}">
+            <button type="submit">Avaa tulostaulu</button>
+        </div>
+        <p class="virhe" id="virhe"{% if not virhe %} hidden{% endif %}>{{ virhe | default('', true) }}</p>
     </form>
+</main>
 
-    <script>
-        // JavaScript to add functionality to the form
-        document.getElementById('updateForm').addEventListener('submit', function(event) {
-            // Prevent the default form submission behavior
+<script>
+    document.getElementById('avausLomake').addEventListener('submit', function (event) {
+        var kentta = document.getElementById('ottelunumero');
+        var virhe = document.getElementById('virhe');
+        var syote = kentta.value.trim();
+
+        if (!/^[0-9]+$/.test(syote)) {
             event.preventDefault();
+            virhe.textContent = 'Anna ottelunumero numeroina.';
+            virhe.hidden = false;
+            kentta.focus();
+            return;
+        }
 
-            // Get the value entered in the text input field
-            var matchNumber = document.getElementById('ottelunumero').value;
-
-            // Construct the URL with the match number
-            var url = "/paivita/" + matchNumber;
-
-            // Redirect the user to the constructed URL
-            window.location.href = url;
-        });
-    </script>
-
+        // Etunollat pois, jotta "007" avaa osoitteen /7
+        event.preventDefault();
+        window.location.href = '/' + parseInt(syote, 10);
+    });
+</script>
 </body>
 </html>

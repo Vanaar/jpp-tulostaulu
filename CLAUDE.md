@@ -1,26 +1,30 @@
 # CLAUDE.md
 
 Junnut Pelaa Pesistä -tulostaulu: Flask-sovellus, joka tarjoaa upotettavan
-pesäpallon tulostaulu-widgetin osoitteessa `/<ottelunumero>`. Kaksi eri
-tulostaulua saman URL-rakenteen takana:
+pesäpallon tulostaulu-widgetin osoitteessa `/<ottelunumero>`. Tiedot haetaan
+Pesäpalloliiton pesistulokset-API:sta. **Tietokantaa ei ole.**
 
-- **Livetaulu** hakee tiedot Pesäpalloliiton pesistulokset-API:sta. Ei käytä
-  tietokantaa. Tämä on aktiivisen kehityksen kohde.
-- **Manuaalitaulu** on käsin päivitettävä (`/paivita/<numero>`) ja käyttää
-  MySQL:ää. Toimii, eikä siihen ole tarkoitus koskea.
+Aiemmin tauluja oli kaksi saman URL-rakenteen takana: API-pohjainen livetaulu
+ja käsin päivitettävä manuaalitaulu, joka oli ainoa MySQL:ää käyttänyt osa.
+Manuaalitaulu poistettiin 4.0:ssa, koska sitä ei käytännössä koskaan käytetty
+mutta se piti yllä koko kantariippuvuutta.
 
 Koodi, kommentit, muuttujanimet ja käyttöliittymätekstit ovat suomeksi. Jatka
 samalla tavalla.
 
 ## Haarat
 
-`main` on tulostaulun virallinen versio ja päähaara (3.0, API-toteutus).
-Haarauta uusi työ siitä. `pt3.0` on 3.0-työn alkuperäinen haara ja osoittaa
-samaan sisältöön; sitä ei enää tarvita erikseen.
+`main` on tulostaulun virallinen versio ja päähaara (4.0). Haarauta uusi työ
+siitä.
 
-`pt2.0` on edellinen versio, joka scrapesi pesistulokset.fi:tä Seleniumilla.
-**Tuotanto ajaa toistaiseksi sitä**, ja se säilytetään paluureittinä — älä
-poista äläkä muuta sitä. Jos etsit "miten tämä ennen toimi", katso `pt2.0`.
+Paluureitit, järjestyksessä uusimmasta vanhimpaan:
+
+- **`v3.1`-tagi**: viimeinen versio, jossa manuaalitaulu ja tietokanta ovat
+  mukana. Tänne palataan, jos 4.0:n poistoista löytyy jotain tarpeellista.
+  `pt3.0`-haara osoittaa samaan 3.0-työhön.
+- **`pt2.0`-haara**: sitä edeltävä versio, joka scrapesi pesistulokset.fi:tä
+  Seleniumilla. **Tuotanto ajoi pitkään tätä.** Säilytetään paluureittinä —
+  älä poista äläkä muuta. Jos etsit "miten tämä ennen toimi", katso `pt2.0`.
 
 Huom: `main` oli pitkään jäljessä, koska tuotantoon vietiin aikanaan `pt2.0`
 eikä mainia päivitetty. Tilanne korjattiin 7.8.2026 mergellä `pt3.0` → `main`.
@@ -37,45 +41,62 @@ python tools/esikatselu.py > esikatselu.html   # renderöi taulun eri tiloissa
 ## Gotchat
 
 **`config.py` puuttuu repostä ja ilman sitä mikään ei importtaudu.** Se on
-`.gitignore`ssa (sisältää tietokannan salasanan ja API-avaimen). Jokainen
-moduuli tekee `from config import Config` importin yhteydessä. Kopioi
-`config.example.py` → `config.py`, jos ympäristö on tyhjä. Uudet asetukset
-luetaan `getattr(Config, 'NIMI', oletus)` -tyyliin, jotta vanha `config.py` ei
-kaada sovellusta.
+`.gitignore`ssa (sisältää API-avaimen). Jokainen moduuli tekee
+`from config import Config` importin yhteydessä. Kopioi `config.example.py` →
+`config.py`, jos ympäristö on tyhjä.
+
+**Puuttuva asetus ei saa kaataa sovellusta — kaikki `Config`-luku menee
+`getattr`in läpi.** Tämä ei ole tyyliseikka: 19.8.2026 tuotantoonvienti kaatui
+juuri tähän. `app/db.py` kutsui `debug_message`ia ennen `create_engine`ia,
+tuotannon `config.py`:stä puuttui `DEBUG_LEVEL`, ja `debug_message` luki sen
+suoraan `Config`ista. Syntynyt `AttributeError` jäi `get_db`:n
+`except Exception`in alle ja muuttui viestiksi "Tietokantayhteyttä ei voitu
+luoda", vaikka kantaan ei koskaan otettu yhteyttä. Jokainen tulostaulu —
+myös se joka ei kantaa tarvinnut — palautti 500:n. Kirjoita siis aina
+`getattr(Config, 'NIMI', oletus)`, myös silloin kun asetus on
+`config.example.py`:ssä. Ainoa pakollinen asetus on `PESISTULOKSET_API_KEY`.
 
 **Käynnistystiedoston nimessä on väliviiva** (`jpp-tulostaulu.py`), joten sitä
 ei voi importata. Testit rakentavat Flask-sovelluksen itse funktiolla
-`luo_sovellus()` tiedostossa `tests/test_reitit.py`. Jos lisäät reitin tai
-muutat blueprintin rekisteröintiä, muutos pitää tehdä molempiin.
+`luo_sovellus()` tiedostossa `tests/test_reitit.py`. **Reittejä ei tarvitse
+enää muistaa lisätä kahteen paikkaan** — myös `/` on blueprintissä, joten
+molemmat saavat reitit samasta lähteestä. Sen sijaan `template_folder`- ja
+`static_folder`-polut sekä blueprintin rekisteröinti on yhä pidettävä
+yhtenevinä.
 
-**Yksi template palvelee kahta täysin eri datamallia.** `tulostaulu.html`
-saa joko SQLAlchemy-olion (`app/models.py: Otteludata`) tai `LiveOttelu`-olion
-(`app/live.py`). `LiveOttelu` on tarkoituksella duck-typattu vastaamaan
-kenttänimiltään kantamallia. **Jos lisäät templateen kentän, lisää se
-molempiin** — muuten toinen taulu hajoaa hiljaa.
+**Taulun sarakkeet tulevat datasta, eivät vakioista.** `Ottelu.sarakkeet`
+(`app/live.py`) on lista dictejä (`otsikko`, `koti`, `vieras`, `aktiivinen`),
+ja template piirtää täsmälleen ne: jaksopelissä jaksot (vähintään 1, 2, S, K)
+ja vuoroparipelissä yksittäiset vuoroparit. Lihavoituun sarakkeeseen tulee
+`paapisteet_koti` / `paapisteet_vieras`. `aktiivinen` kertoo vain missä
+sarakkeessa pelataan; sisävuoron korostukseen tarvitaan lisäksi `sisavuoro`.
 
-**Taulun sarakkeet tulevat datasta, eivät vakioista.** `LiveOttelu.sarakkeet`
-on lista dictejä (`otsikko`, `koti`, `vieras`, `aktiivinen`), ja template
-piirtää täsmälleen ne. Lihavoituun sarakkeeseen tulee `paapisteet_koti` /
-`paapisteet_vieras`. Manuaalitaulun `Otteludata` ei tunne näitä kenttiä, joten
-templaten alussa on sille haara, joka rakentaa vanhat neljä jaksosaraketta
-`jakso_N_*_juoksut`-kentistä. `aktiivinen` kertoo vain missä sarakkeessa
-pelataan; sisävuoron korostus vaatii lisäksi nimivertailun (ks. alla).
-
-**Sisävuoron korostus perustuu joukkueen nimen vertailuun**
-(`ottelu.nykyinen_lyontivuoro == ottelu.kotijoukkue`). Se on peräisin
-manuaalitaulusta. Jos joukkueilla olisi identtinen näyttönimi, korostus menisi
-molempiin riveihin. Älä riko tätä sopimusta ilman että korjaat manuaalipuolen
-samalla.
+**Sisävuoro on eksplisiittinen kenttä.** `Ottelu.sisavuoro` on `"koti"`,
+`"vieras"` tai `None`, ja template korostaa sen perusteella sekä aktiivisen
+solun että palosolun sijainnin. Aiemmin (3.x) korostus pääteltiin vertaamalla
+joukkueen näyttönimeä; sopimus periytyi manuaalitaulusta ja olisi osunut
+molempiin riveihin, jos joukkueilla olisi ollut sama nimi. Jaksotauolla,
+alkamattomassa ja päättyneessä ottelussa arvo on `None`, jolloin korostusta
+eikä paloja näytetä.
 
 **`palot` on HTML-merkkijono, joka renderöidään `|safe`-suodattimella.**
 `parsi_x_palot()` tuottaa vain `X`- ja `<br/>`-merkkejä. Pidä se sellaisena.
 
 **Widgetin URL-sopimus on julkinen eikä sitä saa muuttaa:** `/<ottelunumero>`,
-valinnaiset `?style=<default|siipe>`, `?debug=on` ja `?koko=<kerroin>`.
-Tauluja on upotettu ulkopuolisille sivuille. Parametreja saa lisätä
-valinnaisina, mutta olemassa olevia ei saa poistaa eikä niiden merkitystä
-muuttaa.
+`/<ottelunumero>/tulostaulu` sekä valinnaiset `?style=<default|siipe>`,
+`?debug=on` ja `?koko=<kerroin>`. Tauluja on upotettu ulkopuolisille sivuille.
+Parametreja saa lisätä valinnaisina, mutta olemassa olevia ei saa poistaa
+eikä niiden merkitystä muuttaa.
+
+**`/` on ottelunumeron avauslomake, ei hallintakäyttöliittymä.** Kelvollinen
+syöte on pelkkiä numeroita; `parsi_ottelunumero` (`app/functions.py`) trimmaa
+välilyönnit ja pudottaa etunollat, joten `007` avaa `/7`. Tarkistus tehdään
+palvelimella (`GET /?ottelunumero=<syöte>` → 302 tai lomake virheviestin
+kanssa), jotta sivu toimii ilman JavaScriptiä; sivun skripti vain säästää
+edestakaisen pyynnön. Lomakkeessa on `novalidate`, koska muuten selaimen oma
+`pattern`-tarkistus estäisi lähetyksen ennen submit-käsittelijää ja käyttäjä
+näkisi selaimen omankielisen kuplan suomenkielisen virheviestin sijaan.
+`pattern="[0-9]*"` on siellä vain iOS:n numeronäppäimistöä varten.
 
 **`?koko=` on tarkoitettu striimigrafiikkaan.** Kerroin annetaan
 `#tulostaulu`-elementille `zoom`-tyylinä, jolloin taulu skaalautuu
@@ -180,31 +201,32 @@ TTL-välimuisti, jonka koko pointti on että katsojamäärä ei vaikuta
 API-kutsujen määrään. `tests/test_reitit.py` vahtii tätä: 20 selainpyyntöä saa
 aiheuttaa korkeintaan 2 API-kutsua.
 
-Välimuistin ja reitityspäätösten dictit eivät koskaan tyhjene itsestään. Muutaman
-ottelun palvelimella tämä on merkityksetöntä, mutta jos jotain muuttuu, se on
+Välimuistin dictit eivät koskaan tyhjene itsestään. Muutaman ottelun
+palvelimella tämä on merkityksetöntä, mutta jos jotain muuttuu, se on
 tiedostettu asia eikä unohdus.
 
-### Tietokantariippuvuus
+### Ei tietokantaa
 
-Livetaulun **täytyy** toimia ilman tietokantaa. `MANUAALITAULU_KAYTOSSA = False`
-ajaa sovelluksen kokonaan ilman kantaa, ja `tests/test_reitit.py`:n
-`IlmanTietokantaaTesti` varmistaa ettei `get_db`-kutsua tapahdu. `app.db`
-importataan tarkoituksella funktioiden sisällä, ei moduulin alussa.
+Sovelluksessa ei ole tietokantaa eikä sitä pidä tuoda takaisin.
+`tests/test_reitit.py`:n `EiTietokantaaTesti` on regressiovahti: se varmistaa
+että `import app.db` nostaa `ModuleNotFoundError` ja ettei `sqlalchemy` päädy
+`sys.modules`iin tulostaulupyynnön aikana.
 
-Reitityssääntö: numero on manuaaliottelu jos ja vain jos se löytyy kannasta
-rivinä, jossa `pesistulokset = 0`. **Kannassa on vanhoja `pesistulokset = 1`
--rivejä** ajalta jolloin scrape kirjoitti tuloksia kantaan. Ne eivät ole
-manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
+Reitityksestä poistui samalla ottelunumeroiden välimuisti (`_reititys`), jonka
+ainoa tehtävä oli välttää kantakysely joka päivityksellä. Numero menee nyt
+suoraan API-polulle. `app/pesistulokset_api.py`:n oma TTL-välimuisti on eri
+asia ja edelleen välttämätön.
 
 ## Tiedostot
 
 | Tiedosto | Vastuu |
 | --- | --- |
+| `jpp-tulostaulu.py` | Käynnistys: Flask-olio + blueprintin rekisteröinti |
 | `app/pesistulokset_api.py` | HTTP-kutsut + välimuisti + virheensieto |
-| `app/live.py` | API-vastaus → tulostaulun näkymämalli |
-| `app/routes.py` | Reititys live/manuaali, ei bisneslogiikkaa |
-| `app/db.py`, `app/models.py` | Vain manuaalitaulu |
-| `app/functions.py` | Jaettuja apufunktioita molemmille tauluille |
+| `app/live.py` | API-vastaus → tulostaulun näkymämalli (`Ottelu`) |
+| `app/routes.py` | Reititys, ei bisneslogiikkaa |
+| `app/functions.py` | Jaettuja apufunktioita |
+| `app/templates/index.html` | Juurisivu: ottelunumeron avauslomake |
 | `app/templates/tulostaulu.html` | Itse taulu, haetaan selaimeen 5 s välein |
 | `app/templates/ottelu.html` | Widgetin kehyssivu + pollaus |
 | `static/css/scoreboard_base.css` | Taulun rakenne, mitat ja muodot |
@@ -242,10 +264,17 @@ manuaaliotteluita vaan ohjautuvat API-polulle. Älä poista tätä tarkistusta.
   ottelun tapahtumat ja ylätasolla luotettavan nykytilan (`period`, `inning`,
   `bat_turn`, `team`). Hyvä ristiintarkistukseen, mutta älä ota tuotannon
   datalähteeksi: dokumentoimaton, eri polun takana, ja `finished` laahaa.
-- `/uusi` ja `/paivita` ovat ilman mitään tunnistautumista.
-- `app/db.py`:n istunnonhallinta on omalaatuista (`update_match` sulkee
-  yhteyden `finally`-lohkossa, `get_match_by_ottelunumero` luo uuden istunnon
-  joka kutsulla). Peruja vanhasta versiosta; ei koskettu tässä refaktoroinnissa.
+- ~~`/uusi` ja `/paivita` ovat ilman mitään tunnistautumista~~ **Poistuivat
+  4.0:ssa manuaalitaulun mukana.** Sovelluksessa ei ole enää yhtään reittiä,
+  joka kirjoittaisi mitään; kaikki on lukemista.
+- ~~`app/db.py`:n istunnonhallinta on omalaatuista~~ **Poistui 4.0:ssa.**
+- **Vanhat manuaaliottelunumerot palauttavat nyt 404:n**, jos numeroa ei
+  löydy pesistuloksista. Tiedostettu ja hyväksytty seuraus manuaalitaulun
+  poistosta (päätös 19.8.2026).
+- **`Ottelu.on_jaksopeli` ja `vuoropari_nro` ovat kentissä mutta template ei
+  lue niitä.** `on_jaksopeli` on lukittu testeillä ja kertoo pelimuodon
+  suoraan; jätetty paikalleen, koska se on halpa ja kuvaa dataa. Jos taulu
+  joskus tarvitsee pelimuotokohtaista logiikkaa, se on jo siinä.
 
 ## Cowork-sessioissa
 

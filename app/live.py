@@ -1,10 +1,9 @@
 # live.py
 """
-Livetulostaulun datamallinnus.
+Tulostaulun datamallinnus.
 
 Muodostaa pesistulokset-API:n kahdesta vastauksesta (match + match-live-result)
-näkymämallin, jolla on samat kenttänimet kuin manuaalitaulun Otteludata-mallilla.
-Näin sama tulostaulu.html toimii molemmille eikä livetaulu tarvitse tietokantaa.
+näkymämallin, jonka tulostaulu.html piirtää sellaisenaan.
 
 API:n kentät pähkinänkuoressa (ks. esimerkit dokumentaatiosta):
 
@@ -79,25 +78,20 @@ def _sarake(otsikko, koti, vieras, aktiivinen=False):
     }
 
 
-class LiveOttelu:
-    """Tulostaulun näkymämalli. Vastaa kentiltään Otteludata-mallia."""
+class Ottelu:
+    """Tulostaulun näkymämalli."""
 
     def __init__(self, ottelunumero):
         self.ottelunumero = ottelunumero
-        # Säilytetään kenttä yhteensopivuuden vuoksi: 1 = data tulee API:sta
-        self.pesistulokset = 1
         self.kotijoukkue = "Koti"
         self.vierasjoukkue = "Vieras"
         self.koti_jaksovoitot = None
         self.vieras_jaksovoitot = None
         # Pistesarakkeet sellaisina kuin ne piirretään. Jaksopelissä jaksot,
-        # vuoroparipelissä vuoroparit. Manuaalitaulun Otteludata-mallissa tätä
-        # kenttää ei ole, jolloin template rakentaa kiinteät neljä jaksoa.
+        # vuoroparipelissä vuoroparit.
         self.on_jaksopeli = True
-        # Oletusmuoto on jaksopelin tyhjä taulu. Näin peruttu ja alkamaton
-        # ottelu piirtyvät kuten ennenkin, eikä lista ole koskaan tyhjä:
-        # template erottaa datamallit sarakkeiden olemassaolosta, ei
-        # pituudesta.
+        # Oletusmuoto on jaksopelin tyhjä taulu, jotta peruttu ja alkamaton
+        # ottelu piirtyvät samannäköisinä kuin alkava jaksopeli.
         self.sarakkeet = [
             _sarake(_jakson_otsikko(i), None, None) for i in range(JAKSOJA)
         ]
@@ -105,25 +99,15 @@ class LiveOttelu:
         # pelissä juoksut yhteensä.
         self.paapisteet_koti = None
         self.paapisteet_vieras = None
-        self.jakso_1_koti_juoksut = None
-        self.jakso_1_vieras_juoksut = None
-        self.jakso_2_koti_juoksut = None
-        self.jakso_2_vieras_juoksut = None
-        self.jakso_3_koti_juoksut = None
-        self.jakso_3_vieras_juoksut = None
-        self.jakso_4_koti_juoksut = None
-        self.jakso_4_vieras_juoksut = None
-        self.nykyinen_lyontivuoro = "-"
+        # Kumpi joukkue on sisävuorossa: "koti", "vieras" tai None. Template
+        # korostaa tämän perusteella sekä aktiivisen solun että palorivin.
+        self.sisavuoro = None
         self.jakso_nro = 0
         self.jakso_txt = ""
         self.vuoropari_nro = 0
         self.vuoropari_txt = ""
         self.palot = ""
         self.otteluinfo = ""
-
-    def aseta_jakson_juoksut(self, jakso_indeksi, koti, vieras):
-        setattr(self, f"jakso_{jakso_indeksi + 1}_koti_juoksut", koti)
-        setattr(self, f"jakso_{jakso_indeksi + 1}_vieras_juoksut", vieras)
 
 
 def joukkueen_nimi(joukkue, oletus):
@@ -162,12 +146,11 @@ def _summaa(vuoroparit):
     return sum(luvut)
 
 
-def _jaksosarakkeet(ottelu, juoksut, nykyinen_jakso_idx):
+def _jaksosarakkeet(juoksut, nykyinen_jakso_idx):
     """Jaksopelin sarakkeet: yksi sarake per jakso, arvona jakson juoksut.
 
     Sarakkeita on vähintään JAKSOJA, eli S ja K piirretään silloinkin kun
-    niitä ei ole pelattu. Asettaa samalla jakso_N_*_juoksut-kentät, joita
-    Otteludata-yhteensopivuus ja manuaalitaulu edellyttävät.
+    niitä ei ole pelattu.
     """
     sarakkeet = []
 
@@ -185,9 +168,6 @@ def _jaksosarakkeet(ottelu, juoksut, nykyinen_jakso_idx):
             koti = None
             vieras = None
 
-        if i < JAKSOJA:
-            ottelu.aseta_jakson_juoksut(i, koti, vieras)
-
         sarakkeet.append(
             _sarake(_jakson_otsikko(i), koti, vieras, i == nykyinen_jakso_idx)
         )
@@ -195,7 +175,7 @@ def _jaksosarakkeet(ottelu, juoksut, nykyinen_jakso_idx):
     return sarakkeet
 
 
-def _vuoroparisarakkeet(ottelu, juoksut, nykyinen_vuoropari_idx, vuoro_kaynnissa):
+def _vuoroparisarakkeet(juoksut, nykyinen_vuoropari_idx, vuoro_kaynnissa):
     """Vuoroparipelin sarakkeet: yksi sarake per vuoropari.
 
     Jaksoja ei ole, joten runs-taulukossa on vain yksi alkio ja sarakkeiden
@@ -222,9 +202,6 @@ def _vuoroparisarakkeet(ottelu, juoksut, nykyinen_vuoropari_idx, vuoro_kaynnissa
             vieras = 0 if vieras is None else vieras
 
         sarakkeet.append(_sarake(str(i + 1), koti, vieras, aktiivinen))
-
-    # Jakson summa säilytetään, jotta näkymämalli vastaa yhä Otteludataa
-    ottelu.aseta_jakson_juoksut(0, _summaa(koti_juoksut), _summaa(vieras_juoksut))
 
     return sarakkeet
 
@@ -298,12 +275,12 @@ def paattele_lyova_joukkue(tulos, ottelu_data):
 
 
 def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
-    """Rakentaa LiveOttelu-olion API-vastauksista.
+    """Rakentaa Ottelu-olion API-vastauksista.
 
     ottelu_data = /public/match -vastaus (pakollinen)
     tulos       = /public/match-live-result -vastauksen result-osa tai None
     """
-    ottelu = LiveOttelu(ottelunumero)
+    ottelu = Ottelu(ottelunumero)
 
     ottelu.kotijoukkue = joukkueen_nimi(ottelu_data.get("home"), "Koti")
     ottelu.vierasjoukkue = joukkueen_nimi(ottelu_data.get("away"), "Vieras")
@@ -365,13 +342,13 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
         ottelu.vieras_jaksovoitot = jaksovoitot.get("away")
         ottelu.paapisteet_koti = ottelu.koti_jaksovoitot
         ottelu.paapisteet_vieras = ottelu.vieras_jaksovoitot
-        ottelu.sarakkeet = _jaksosarakkeet(ottelu, juoksut, nykyinen_jakso_idx)
+        ottelu.sarakkeet = _jaksosarakkeet(juoksut, nykyinen_jakso_idx)
     else:
         # Ei jaksoja eikä jaksovoittoja, joten lihavoituun sarakkeeseen tulee
         # juoksut yhteensä. Se on tässä pelimuodossa ottelun lopputulos.
         ottelu.otteluinfo = "Vuoroparipeli"
         ottelu.sarakkeet = _vuoroparisarakkeet(
-            ottelu, juoksut, nykyinen_vuoropari_idx, vuoro_kaynnissa
+            juoksut, nykyinen_vuoropari_idx, vuoro_kaynnissa
         )
         ottelu.paapisteet_koti = _summaa([s["koti"] for s in ottelu.sarakkeet])
         ottelu.paapisteet_vieras = _summaa([s["vieras"] for s in ottelu.sarakkeet])
@@ -386,11 +363,11 @@ def rakenna_ottelu(ottelunumero, ottelu_data, tulos):
     # ole lyömässä, joten korostusta ei näytetä.
     lyova = paattele_lyova_joukkue(tulos, ottelu_data) if vuoro_kaynnissa else None
     if lyova == "home":
-        ottelu.nykyinen_lyontivuoro = ottelu.kotijoukkue
+        ottelu.sisavuoro = "koti"
     elif lyova == "away":
-        ottelu.nykyinen_lyontivuoro = ottelu.vierasjoukkue
+        ottelu.sisavuoro = "vieras"
     else:
-        ottelu.nykyinen_lyontivuoro = "-"
+        ottelu.sisavuoro = None
         if vuoro_kaynnissa:
             debug_message(
                 f"Lyömässä olevaa joukkuetta ei voitu päätellä (ottelu {ottelunumero})",
